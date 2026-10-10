@@ -372,6 +372,9 @@ textarea.note-in {
 
   <footer class="footnote">
     <span id="mode-note"></span>
+    <span class="row" id="fb-tools" hidden>
+      <button class="linkish" id="invite-btn" type="button">העתקת קישור הזמנה למשפחה</button>
+    </span>
     <span class="row" id="local-tools" hidden>
       <button class="linkish" id="export-btn" type="button">גיבוי לקובץ</button>
       <label class="linkish" for="import-file">שחזור מגיבוי</label>
@@ -438,6 +441,25 @@ textarea.note-in {
       <p>בוחרים שם, וכל חוות דעת שתכתבו תירשם על שמכם. אפשר להחליף בכל רגע מלמעלה.</p>
     </div>
     <div class="who-grid" id="who-grid"></div>
+  </div>
+</dialog>
+
+<!-- Library connect (Firebase) -->
+<dialog id="lib-dlg" dir="rtl" lang="he" aria-label="התחברות לספרייה">
+  <div class="sheet confirm">
+    <button class="close" type="button" data-close aria-label="סגירה">×</button>
+    <h2>הספרייה המשפחתית</h2>
+    <p class="status-line err" id="lib-msg" role="status"></p>
+    <div class="fld"><label for="lib-code">קוד ספרייה או קישור הזמנה</label><input id="lib-code" class="mono" autocomplete="off" placeholder="https://…#join-…"></div>
+    <div class="row">
+      <button class="btn primary" type="button" id="lib-join">התחברות</button>
+      <span style="color:var(--muted)">או</span>
+      <button class="btn" type="button" id="lib-new">יצירת ספרייה חדשה</button>
+    </div>
+    <div id="lib-created" hidden>
+      <p>הספרייה נוצרה. שלחו את הקישור הזה לרביד, עדי, קרן וליאור (למשל בוואטסאפ). מי שפותח אותו מתחבר לאותה ספרייה:</p>
+      <div class="row"><input id="lib-link" class="mono" readonly style="flex:1 1 240px;min-width:0;padding:.5rem;border:1px solid var(--line);border-radius:4px;background:var(--bg-2)"><button class="btn" type="button" id="lib-copy">העתקה</button></div>
+    </div>
   </div>
 </dialog>
 
@@ -518,7 +540,14 @@ textarea.note-in {
   /* ---------------- Store: Claude db (shared) or this browser ---------------- */
   const store = {
     mode: "loading", books: [], db: null, sample: null,
+    fs: null, lib: null, unsub: null,
     async init() {
+      const cfg = window.FIREBASE_CONFIG;
+      if (cfg && cfg.projectId && window.firebase && window.firebase.firestore) {
+        try { if (!firebase.apps.length) firebase.initializeApp(cfg); store.fs = firebase.firestore(); }
+        catch (e) { console.warn(e); store.fs = null; }
+        if (store.fs) { store.mode = "firebase"; return store.connectLibrary(); }
+      }
       const api = window.claude && typeof window.claude.use === "function" ? window.claude : null;
       if (api) {
         api.use("sample").then(s => { store.sample = s; updateAiUi(); }).catch(() => {});
@@ -538,12 +567,39 @@ textarea.note-in {
       store.books = ls.get("homeLibrary.books", []);
       render();
     },
+    col() { return store.fs.collection("libraries/" + store.lib + "/books"); },
+    async connectLibrary(key) {
+      key = key || joinKeyFromHash() || ls.get("homeLibrary.lib", null);
+      if (!key) { render(); openLib(); return; }
+      let snap;
+      try { snap = await store.fs.doc("libraries/" + key).get(); }
+      catch (e) { console.warn(e); render(); openLib("אין חיבור למסד הנתונים. בדקו את האינטרנט ונסו שוב."); return; }
+      if (!snap.exists) { ls.set("homeLibrary.lib", null); store.lib = null; render(); openLib("הקוד הזה לא שייך לאף ספרייה. בדקו שהעתקתם אותו במלואו."); return; }
+      store.lib = key; ls.set("homeLibrary.lib", key);
+      if (store.unsub) store.unsub();
+      store.unsub = store.col().onSnapshot(
+        q => { store.books = q.docs.map(d => ({ id: d.id, ...d.data() })); render(); },
+        err => { console.warn(err); toast(dbErr(err)); }
+      );
+      if ($("#lib-dlg").open) $("#lib-dlg").close();
+      render();
+    },
+    async createLibrary() {
+      const a = new Uint8Array(15); crypto.getRandomValues(a);
+      const key = Array.from(a, n => "abcdefghijkmnpqrstuvwxyz23456789"[n % 32]).join("");
+      await store.fs.doc("libraries/" + key).set({ name: "ספריית הבית", createdAt: Date.now(), createdBy: me || "" });
+      await store.connectLibrary(key);
+      return key;
+    },
+    inviteLink() { return location.origin + location.pathname + "#join-" + store.lib; },
     persistLocal() { if (!ls.set("homeLibrary.books", store.books)) toast("הדפדפן מלא. כדאי לגבות לקובץ ולהקטין תמונות."); render(); },
     async add(book) {
+      if (store.fs) return store.col().doc(book.id).set(book);
       if (store.db) return store.db.collection("books").doc(book.id).set(book);
       store.books.push(book); store.persistLocal();
     },
     async update(id, patch) {
+      if (store.fs) return store.col().doc(id).update(patch);
       if (store.db) return store.db.doc("books/" + id).update(patch);
       const b = store.books.find(x => x.id === id); if (!b) return;
       for (const [k, v] of Object.entries(patch)) {
@@ -552,13 +608,21 @@ textarea.note-in {
       }
       store.persistLocal();
     },
+    async setReview(id, member, entry) {
+      if (store.fs) return store.col().doc(id).update({ ["reviews." + member]: entry || firebase.firestore.FieldValue.delete() });
+      return store.update(id, { reviews: { [member]: entry } });
+    },
     async remove(id) {
+      if (store.fs) return store.col().doc(id).delete();
       if (store.db) return store.db.doc("books/" + id).delete();
       store.books = store.books.filter(x => x.id !== id); store.persistLocal();
     },
   };
   function dbErr(e) {
     const code = e && e.code;
+    if (code === "permission-denied") return "Firebase חסם את הפעולה. בדקו שכללי האבטחה (firestore.rules) הועתקו ל־Firebase.";
+    if (code === "unavailable" || code === "deadline-exceeded") return "אין חיבור למסד הנתונים. בדקו את האינטרנט ונסו שוב.";
+    if (code === "invalid-argument" || code === "resource-exhausted") return "הספר גדול מדי לשמירה. נסו תמונת כריכה קטנה יותר.";
     if (code === "invalid_argument") return "אין לכם הרשאת כתיבה בספרייה הזו. בקשו מבעלי הספרייה לשתף אתכם כ־Contributor.";
     if (code === "quota_exceeded") return "המקום בקטלוג נגמר. נסו להסיר תמונות גדולות או ספרים ישנים.";
     return "השמירה לא הצליחה. בדקו את החיבור ונסו שוב.";
@@ -634,6 +698,12 @@ textarea.note-in {
   function renderShelf() {
     const wrap = $("#shelf-wrap");
     if (store.mode === "loading") return;
+    if (store.mode === "firebase" && !store.lib) {
+      wrap.innerHTML = `<div class="empty"><div class="slot">נעול</div><h2>מתחברים לספרייה המשפחתית</h2>
+        <p>פותחים את קישור ההזמנה שקיבלתם מהמשפחה, או מקלידים את קוד הספרייה. אם עוד אין ספרייה, יוצרים אחת חדשה.</p>
+        <button class="btn primary" type="button" data-action="lib">התחברות לספרייה</button></div>`;
+      return;
+    }
     if (!store.books.length) {
       wrap.innerHTML = `<div class="empty">
         <div class="slot">מגירה ריקה</div>
@@ -673,6 +743,10 @@ textarea.note-in {
   }
   function renderMode() {
     const note = $("#mode-note");
+    if (store.mode === "firebase") {
+      note.textContent = store.lib ? "הקטלוג משותף לכל הבית ומתעדכן אצל כולם מיד." : "עוד לא מחוברים לספרייה.";
+      $("#local-tools").hidden = true; $("#fb-tools").hidden = !store.lib; return;
+    }
     if (store.mode === "shared") { note.textContent = "הקטלוג משותף: כל מי שפותח את הדף רואה את אותם ספרים ואת אותן חוות דעת."; $("#local-tools").hidden = true; }
     else if (store.mode === "local") { note.textContent = "הקטלוג נשמר בדפדפן הזה. כדאי לגבות אותו לקובץ מדי פעם."; $("#local-tools").hidden = false; }
   }
@@ -783,14 +857,14 @@ textarea.note-in {
     if (!draft.status && !draft.rating && !note) { toast("בחרו סטטוס, דירוג או כתבו כמה מילים."); return; }
     const entry = { status: draft.status || "done", rating: draft.rating || 0, note, updatedAt: Date.now() };
     try {
-      await store.update(b.id, { reviews: { [me]: entry } });
+      await store.setReview(b.id, me, entry);
       draft = null; toast("חוות הדעת נשמרה");
       renderBookCard();
     } catch (e) { toast(dbErr(e)); }
   }
   async function deleteReview() {
     const b = store.books.find(x => x.id === openId); if (!b || !me) return;
-    try { await store.update(b.id, { reviews: { [me]: null } }); draft = null; toast("חוות הדעת נמחקה"); renderBookCard(); }
+    try { await store.setReview(b.id, me, null); draft = null; toast("חוות הדעת נמחקה"); renderBookCard(); }
     catch (e) { toast(dbErr(e)); }
   }
 
@@ -995,6 +1069,28 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     $("#who-dlg").showModal();
   }
 
+  /* ---------------- Family library (Firebase) ---------------- */
+  function parseKey(v) {
+    v = String(v || "").trim();
+    const m = v.match(/join-([a-z0-9]{12,})/i);
+    const k = m ? m[1] : v;
+    return /^[a-z0-9]{12,}$/i.test(k) ? k.toLowerCase() : "";
+  }
+  function joinKeyFromHash() {
+    const k = parseKey(location.hash);
+    if (k) { try { history.replaceState(null, "", location.pathname + location.search); } catch {} }
+    return k;
+  }
+  function openLib(msg) {
+    $("#lib-msg").textContent = msg || "";
+    $("#lib-created").hidden = true;
+    const d = $("#lib-dlg"); if (!d.open) d.showModal();
+  }
+  async function copyText(text, input) {
+    try { await navigator.clipboard.writeText(text); toast("הקישור הועתק"); }
+    catch { if (input) { input.focus(); input.select(); } toast("סמנו את הקישור והעתיקו"); }
+  }
+
   /* ---------------- Backup (browser-only mode) ---------------- */
   function exportJson() {
     const blob = new Blob([JSON.stringify({ app: "homeLibrary", v: 1, books: store.books }, null, 1)], { type: "application/json" });
@@ -1031,6 +1127,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     else if (act === "save-review") saveReview();
     else if (act === "del-review") deleteReview();
     else if (act === "pick-me") openWho();
+    else if (act === "lib") openLib();
     else if (act === "edit") { const b = store.books.find(x => x.id === openId); $("#book-dlg").close(); openForm(b); }
     else if (act === "delete") {
       const b = store.books.find(x => x.id === openId); if (!b) return;
@@ -1060,6 +1157,22 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
   $("#photo-ai-btn").addEventListener("click", identifyFromPhoto);
   $("#cover-clear").addEventListener("click", () => { formCover = ""; photoBlob = null; setCoverPreview(); updateAiUi(); });
   $("#export-btn").addEventListener("click", exportJson);
+  $("#lib-join").addEventListener("click", async () => {
+    const k = parseKey($("#lib-code").value);
+    if (!k) { $("#lib-msg").textContent = "זה לא נראה כמו קוד ספרייה. הדביקו את כל קישור ההזמנה."; return; }
+    $("#lib-msg").textContent = ""; await store.connectLibrary(k);
+  });
+  $("#lib-new").addEventListener("click", async () => {
+    const btn = $("#lib-new"); btn.disabled = true;
+    try {
+      await store.createLibrary();
+      const d = $("#lib-dlg"); if (!d.open) d.showModal();
+      $("#lib-msg").textContent = ""; $("#lib-link").value = store.inviteLink(); $("#lib-created").hidden = false;
+    } catch (e) { console.warn(e); $("#lib-msg").textContent = dbErr(e); }
+    finally { btn.disabled = false; }
+  });
+  $("#lib-copy").addEventListener("click", () => copyText($("#lib-link").value, $("#lib-link")));
+  $("#invite-btn").addEventListener("click", () => copyText(store.inviteLink()));
   $("#import-file").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) importJson(f); });
   $("#book-dlg").addEventListener("close", () => { openId = null; draft = null; });
 

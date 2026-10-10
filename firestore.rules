@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // A library is reachable only by its long random code (from the invite link).
+    // Nobody can list libraries, so the code acts as the family's key.
+    match /libraries/{lib} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if lib.size() >= 12 && lib.matches('^[a-z0-9]+$');
+      allow update, delete: if false;
+
+      match /books/{book} {
+        allow read, write: if exists(/databases/$(database)/documents/libraries/$(lib));
+      }
+    }
+  }
+}
