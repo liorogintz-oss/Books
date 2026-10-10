@@ -495,9 +495,7 @@ textarea.note-in {
         <div class="cover" id="f-back-prev"></div>
         <div class="btns">
           <label class="btn" for="f-back-photo">צילום הכריכה האחורית</label>
-          <small style="color:var(--muted);max-width:22ch">מצלמים ישר מעל הספר, קרוב, באור טוב ובלי צל</small>
           <input id="f-back-photo" type="file" accept="image/*" capture="environment" hidden>
-          <button class="btn ghost" type="button" id="back-ocr-btn" hidden>קריאת הטקסט מחדש</button>
           <button class="linkish" type="button" id="back-clear" hidden>הסרת התמונה</button>
         </div>
       </div>
@@ -518,7 +516,6 @@ textarea.note-in {
         <div class="fld wide"><label for="f-cats">נושאים (מופרדים בפסיק)</label><input id="f-cats"></div>
         <div class="fld wide"><label for="f-shelf">איפה הוא עומד בבית</label><input id="f-shelf" placeholder="למשל: הסלון, מדף עליון"></div>
         <div class="fld wide"><label for="f-desc">תקציר</label><textarea id="f-desc"></textarea></div>
-        <div class="fld wide"><label for="f-backtext">הטקסט מהכריכה האחורית</label><textarea id="f-backtext" placeholder="מצלמים את הכריכה האחורית, והטקסט שעליה יופיע כאן"></textarea></div>
       </div>
       <div class="form-foot">
         <button class="btn primary" type="submit" id="save-btn">שמירה בקטלוג</button>
@@ -828,7 +825,7 @@ textarea.note-in {
       if (filter === "unread" && reviewsOf(b).some(([, v]) => v.status === "done")) return false;
       if (["want", "reading", "done"].includes(filter) && !(b.reviews && b.reviews[me] && b.reviews[me].status === filter)) return false;
       if (!q) return true;
-      const hay = [b.title, b.subtitle, ...(b.authors || []), b.publisher, ...(b.categories || []), ...(b.genres || []), b.backText || ""].join(" ").toLowerCase();
+      const hay = [b.title, b.subtitle, ...(b.authors || []), b.publisher, ...(b.categories || []), ...(b.genres || [])].join(" ").toLowerCase();
       return hay.includes(q) || (qIsbn.length >= 4 && (b.isbn || "").includes(qIsbn));
     });
     const sort = $("#sort").value;
@@ -1037,7 +1034,6 @@ textarea.note-in {
             <dl class="fields">${fields.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
             ${(b.genres || []).length ? `<div class="tags">${b.genres.map(c => `<button type="button" class="tag genre" data-genre="${esc(c)}" title="כל הספרים בז׳אנר הזה">${esc(c)}</button>`).join("")}</div>` : ""}
             ${desc ? `<div class="desc ${long && !descOpen ? "clamped" : ""}">${esc(desc)}</div>${long ? `<button class="linkish" type="button" data-action="toggle-desc">${descOpen ? "פחות" : "להמשך התקציר"}</button>` : ""}` : ""}
-            ${b.backText ? `<h3 class="sect">מהכריכה האחורית</h3><div class="desc">${esc(b.backText)}</div>` : ""}
             ${b.aiSourced ? `<p class="status-line" style="margin-top:.6rem">הפרטים זוהו על ידי Claude. כדאי לוודא מול הספר.</p>` : ""}
             <div class="card-actions">
               ${(b.authors || [])[0] ? `<button class="btn" type="button" data-action="author-books">ספרים נוספים של ${esc(b.authors[0])}</button>` : ""}
@@ -1100,7 +1096,6 @@ textarea.note-in {
     el.className = "cover" + (formBack ? "" : " back-empty");
     el.innerHTML = formBack ? `<img src="${esc(formBack)}" alt="">` : "כריכה אחורית";
     $("#back-clear").hidden = !formBack;
-    $("#back-ocr-btn").hidden = !backFile;
   }
   function setCoverPreview() {
     const title = F("title").value.trim();
@@ -1117,7 +1112,6 @@ textarea.note-in {
     F("copies").value = b.copies || 1;
     F("gr").value = b.grRating || ""; formGb = b.gbRating || null; formOl = b.olRating || null; updateGrLink();
     F("genres").value = Array.isArray(b.genres) ? b.genres.join(", ") : (b.genres || "");
-    F("backtext").value = b.backText || "";
     formCover = b.cover || ""; formAi = !!b.aiSourced;
     formBack = b.backCover || "";
     setCoverPreview(); setBackPreview();
@@ -1350,7 +1344,7 @@ Use the title and names as printed on the book (Hebrew script for Hebrew books).
       return;
     }
     const keepCover = formCover;
-    fillForm({ ...info, isbn, shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, backText: F("backtext").value, grRating: F("gr").value, gbRating: info.gbRating || formGb, olRating: info.olRating || formOl, genres: (info.genres && info.genres.length) ? info.genres : splitList(F("genres").value), cover: keepCover.startsWith("data:") ? keepCover : (info.cover || keepCover) });
+    fillForm({ ...info, isbn, shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, grRating: F("gr").value, gbRating: info.gbRating || formGb, olRating: info.olRating || formOl, genres: (info.genres && info.genres.length) ? info.genres : splitList(F("genres").value), cover: keepCover.startsWith("data:") ? keepCover : (info.cover || keepCover) });
     setStatus(info.aiSourced ? "Claude זיהה את הספר. כדאי לעבור על הפרטים לפני השמירה." : "נמצא! עוברים על הפרטים ושומרים.", "ok");
     if (fromScan === true) $("#save-btn").focus();
   }
@@ -1384,102 +1378,11 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
         { images: photoBlob, modelTier: "default" });
       if (!r || !r.found) { setStatus("לא הצלחנו לזהות ספר בתמונה. נסו צילום חד יותר של הכריכה או של הברקוד.", "err"); return; }
       const isbn = cleanIsbn(r.isbn);
-      fillForm({ ...r, isbn: validIsbn(isbn) ? toIsbn13(isbn) : "", shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, backText: F("backtext").value, grRating: F("gr").value, gbRating: formGb, olRating: formOl, genres: splitList(F("genres").value).length ? splitList(F("genres").value) : (r.categories || []), cover: formCover, aiSourced: true });
+      fillForm({ ...r, isbn: validIsbn(isbn) ? toIsbn13(isbn) : "", shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, grRating: F("gr").value, gbRating: formGb, olRating: formOl, genres: splitList(F("genres").value).length ? splitList(F("genres").value) : (r.categories || []), cover: formCover, aiSourced: true });
       setStatus("זוהה מהתמונה. כדאי לעבור על הפרטים לפני השמירה.", "ok");
     } catch (e) {
       if (e && e.code === "not_granted") { store.sample = null; updateAiUi(); setStatus("הזיהוי מתמונה לא אושר. אפשר למלא ידנית.", "err"); }
       else setStatus("הזיהוי לא הצליח הפעם. אפשר למלא ידנית.", "err");
-    } finally { btn.disabled = false; }
-  }
-
-  /* Back cover: photo -> text */
-  function loadTesseract() {
-    if (window.Tesseract) return Promise.resolve(window.Tesseract);
-    return new Promise((res, rej) => {
-      const el = document.createElement("script");
-      el.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
-      el.onload = () => window.Tesseract ? res(window.Tesseract) : rej(new Error("tesseract"));
-      el.onerror = rej; document.head.appendChild(el);
-    });
-  }
-  function tidyOcr(t) {
-    const letters = l => (l.match(/[\u05D0-\u05EAA-Za-z0-9]/g) || []).length;
-    return String(t || "")
-      .replace(/\r/g, "")
-      .split("\n").filter(l => !l.trim() || letters(l) / l.replace(/\s/g, "").length >= 0.6).join("\n")
-      .split(/\n\s*\n/)                                   // paragraphs
-      .map(p => p.replace(/-\n(?=\S)/g, "").replace(/\s*\n\s*/g, " ").replace(/[ \t]{2,}/g, " ").trim())
-      .filter(p => p.length > 2 && !/^(isbn|978|979)[\d\s-]*$/i.test(p))
-      .join("\n\n");
-  }
-  // Phone photos have uneven light and a dark surround; a local (Sauvola) threshold turns them
-  // into clean black text on white, which lifted Hebrew accuracy from ~70% to ~98% in testing.
-  function ocrCanvas(img) {
-    const sc = Math.min(1, 2200 / Math.max(img.naturalWidth, img.naturalHeight));
-    const c = document.createElement("canvas");
-    const W = c.width = Math.round(img.naturalWidth * sc), H = c.height = Math.round(img.naturalHeight * sc);
-    const ctx = c.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(img, 0, 0, W, H);
-    const d = ctx.getImageData(0, 0, W, H), px = d.data, n = W * H;
-    const g = new Float32Array(n);
-    for (let i = 0; i < n; i++) g[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
-    const S = new Float64Array((W + 1) * (H + 1)), S2 = new Float64Array((W + 1) * (H + 1));
-    for (let y = 1; y <= H; y++) {
-      let row = 0, row2 = 0;
-      for (let x = 1; x <= W; x++) {
-        const v = g[(y - 1) * W + x - 1]; row += v; row2 += v * v;
-        S[y * (W + 1) + x] = S[(y - 1) * (W + 1) + x] + row; S2[y * (W + 1) + x] = S2[(y - 1) * (W + 1) + x] + row2;
-      }
-    }
-    const r = Math.max(8, Math.round(Math.min(W, H) / 40)), k = 0.2;
-    for (let y = 0; y < H; y++) {
-      const y0 = Math.max(0, y - r), y1 = Math.min(H, y + r + 1);
-      for (let x = 0; x < W; x++) {
-        const x0 = Math.max(0, x - r), x1 = Math.min(W, x + r + 1), cnt = (x1 - x0) * (y1 - y0);
-        const a = y1 * (W + 1), b0 = y0 * (W + 1);
-        const sum = S[a + x1] - S[b0 + x1] - S[a + x0] + S[b0 + x0];
-        const sum2 = S2[a + x1] - S2[b0 + x1] - S2[a + x0] + S2[b0 + x0];
-        const m = sum / cnt, sd = Math.sqrt(Math.max(0, sum2 / cnt - m * m));
-        const v = g[y * W + x] > m * (1 + k * (sd / 128 - 1)) ? 255 : 0, i = (y * W + x) * 4;
-        px[i] = px[i + 1] = px[i + 2] = v;
-      }
-    }
-    ctx.putImageData(d, 0, 0);
-    return c;
-  }
-  async function readBackCover(file) {
-    const st = $("#back-status");
-    const say = (t, k) => { st.textContent = t; st.className = "status-line" + (k ? " " + k : ""); };
-    const btn = $("#back-ocr-btn"); btn.disabled = true;
-    try {
-      let text = "";
-      if (store.sample) {
-        say("Claude קורא את הכריכה האחורית…");
-        const r = await store.sample(
-          `This is a photo of a book's back cover. Transcribe the blurb text exactly as printed, in its original language (keep Hebrew in Hebrew script, right-to-left logical order). Keep paragraph breaks as blank lines. Leave out the barcode, ISBN, price, website and publisher boilerplate. Output only the text, nothing else.`,
-          { images: file, modelTier: "default" });
-        text = r.text.trim();
-      } else {
-        say("טוענים את כלי הקריאה (בפעם הראשונה זה לוקח כמה שניות)…");
-        const T = await loadTesseract();
-        const bookLang = F("lang").value || guessLang(F("title").value);
-        const lang = bookLang === "אנגלית" ? "eng" : "heb+eng"; // Hebrew blurbs often quote English names
-        const worker = await T.createWorker(lang, 1, {
-          logger: m => { if (m.status === "recognizing text") say(`קוראים את הטקסט${bookLang ? " ב" + bookLang : ""}… ${Math.round(m.progress * 100)}%`); },
-        });
-        const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
-        const { data } = await worker.recognize(ocrCanvas(img));
-        URL.revokeObjectURL(img.src);
-        await worker.terminate();
-        text = tidyOcr(data.text);
-      }
-      if (!text) { say("לא מצאנו טקסט בתמונה. מצלמים ישר, קרוב ובתאורה טובה.", "err"); return; }
-      F("backtext").value = text;
-      say("הטקסט הועתק לשדה \"הטקסט מהכריכה האחורית\". כדאי לעבור עליו ולתקן מילים שלא נקראו נכון. אם הוא יצא משובש, בודקים ששפת הספר נכונה ולוחצים \"קריאת הטקסט מחדש\".", "ok");
-    } catch (e) {
-      console.warn(e);
-      if (e && e.code === "not_granted") store.sample = null;
-      say("לא הצלחנו לקרוא את הטקסט. אפשר לנסות שוב או להקליד אותו.", "err");
     } finally { btn.disabled = false; }
   }
 
@@ -1497,7 +1400,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
       year: F("year").value.trim(), pages: parseInt(F("pages").value, 10) || null, language: F("lang").value.trim(),
       categories: splitList(F("cats").value), shelf: F("shelf").value.trim(), description: F("desc").value.trim(),
       cover: formCover, aiSourced: formAi,
-      backCover: formBack, backText: F("backtext").value.trim(),
+      backCover: formBack,
       grRating: parseRating(F("gr").value), gbRating: formGb, olRating: formOl, genres: splitList(F("genres").value),
       copies: Math.min(99, Math.max(1, parseInt(F("copies").value, 10) || 1)),
     };
@@ -1791,10 +1694,8 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
       // Large enough to read on screen; smaller in the Claude store, whose documents are capped at 256 KB.
       const { dataUrl } = store.db ? await shrink(file, 820, 560, 0.7) : await shrink(file, 1150, 800, 0.78);
       formBack = dataUrl; backFile = file; setBackPreview();
-      readBackCover(file);
     } catch { $("#back-status").textContent = "לא הצלחנו לקרוא את התמונה. נסו קובץ JPG או PNG."; }
   });
-  $("#back-ocr-btn").addEventListener("click", () => backFile && readBackCover(backFile));
   $("#back-clear").addEventListener("click", () => { formBack = ""; backFile = null; setBackPreview(); $("#back-status").textContent = ""; });
   $("#cover-clear").addEventListener("click", () => { formCover = ""; photoBlob = null; setCoverPreview(); updateAiUi(); });
   $("#export-btn").addEventListener("click", exportJson);
