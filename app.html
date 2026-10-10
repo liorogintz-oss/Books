@@ -313,6 +313,29 @@ textarea.note-in {
 .confirm { padding: var(--s-5); display: grid; gap: var(--s-4); }
 .confirm h2 { font-size: 1.4rem; }
 
+/* Barcode scanner */
+.scan-sheet { padding: var(--s-4); display: grid; gap: var(--s-3); background: #0e1311; color: #eef2ee; }
+.scan-sheet h2 { font-size: 1.3rem; padding-inline-end: 2.6rem; }
+.scan-view { position: relative; width: 100%; max-width: 100%; aspect-ratio: 3 / 4; max-height: 62dvh; border-radius: 6px; overflow: hidden; background: #000; }
+@media (min-width: 640px) { .scan-view { aspect-ratio: 4 / 3; } }
+.scan-view video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scan-frame { position: absolute; inset: 34% 9%; pointer-events: none;
+  background:
+    linear-gradient(#fff, #fff) top left / 26px 3px no-repeat, linear-gradient(#fff, #fff) top left / 3px 26px no-repeat,
+    linear-gradient(#fff, #fff) top right / 26px 3px no-repeat, linear-gradient(#fff, #fff) top right / 3px 26px no-repeat,
+    linear-gradient(#fff, #fff) bottom left / 26px 3px no-repeat, linear-gradient(#fff, #fff) bottom left / 3px 26px no-repeat,
+    linear-gradient(#fff, #fff) bottom right / 26px 3px no-repeat, linear-gradient(#fff, #fff) bottom right / 3px 26px no-repeat;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / .38);
+}
+.scan-frame::after { content: ""; position: absolute; inset-inline: 4%; top: 50%; height: 2px; background: #ff4b3e; box-shadow: 0 0 8px #ff4b3e; animation: laser 1.6s ease-in-out infinite alternate; }
+@keyframes laser { from { translate: 0 -28px; } to { translate: 0 28px; } }
+.scan-view.found .scan-frame::after { background: #4fe39b; box-shadow: 0 0 10px #4fe39b; animation: none; }
+.scan-msg { margin: 0; min-height: 1.5em; font-size: .95rem; }
+.scan-msg.err { color: #ff9a8f; }
+.scan-sheet .btn { background: rgb(255 255 255 / .08); border-color: rgb(255 255 255 / .2); color: #eef2ee; }
+.scan-sheet .close { background: #0e1311; color: #eef2ee; border-color: rgb(255 255 255 / .25); }
+.isbn-row .btn.scan { background: #f6eee2; color: #2a1c10; border-color: transparent; }
+
 .toast {
   position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; translate: -50% 0;
   background: var(--ink); color: var(--bg); padding: .6rem 1rem; border-radius: 6px; box-shadow: var(--shadow); z-index: 50;
@@ -355,6 +378,10 @@ textarea.note-in {
       <option value="author">לפי מחבר</option>
       <option value="rating">לפי דירוג</option>
     </select>
+    <button id="scan-btn" class="btn" type="button">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M7 8v8M10 8v8M13 8v8M16 8v8"></path></svg>
+      סריקת ברקוד
+    </button>
     <button id="add-btn" class="btn primary" type="button">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
       הוספת ספר
@@ -396,9 +423,10 @@ textarea.note-in {
         <label for="f-isbn">מספר ISBN (מגב הספר, מעל הברקוד)</label>
         <div class="isbn-row">
           <input id="f-isbn" inputmode="numeric" autocomplete="off" placeholder="978-965-…">
+          <button class="btn scan" type="button" id="scan-in-form">סריקה במצלמה</button>
           <button class="btn primary" type="button" id="lookup-btn">איתור פרטים</button>
         </div>
-        <p class="isbn-hint" id="isbn-hint">מקלידים את המספר, והשם, המחבר, ההוצאה והכריכה יתמלאו לבד.</p>
+        <p class="isbn-hint" id="isbn-hint">סורקים את הברקוד שבגב הספר או מקלידים את המספר, והשם, המחבר, ההוצאה והכריכה יתמלאו לבד.</p>
       </div>
       <p class="status-line" id="lookup-status" role="status" aria-live="polite"></p>
 
@@ -427,9 +455,28 @@ textarea.note-in {
       </div>
       <div class="form-foot">
         <button class="btn primary" type="submit" id="save-btn">שמירה בקטלוג</button>
+        <button class="btn" type="submit" id="save-next">שמירה וסריקת הספר הבא</button>
         <button class="btn ghost" type="button" data-close>ביטול</button>
       </div>
     </form>
+  </div>
+</dialog>
+
+<!-- Barcode scanner -->
+<dialog id="scan-dlg" dir="rtl" lang="he" aria-label="סריקת ברקוד">
+  <div class="sheet scan-sheet">
+    <button class="close" type="button" data-close aria-label="סגירה">×</button>
+    <h2>סריקת הברקוד שבגב הספר</h2>
+    <div class="scan-view" id="scan-view">
+      <video id="scan-video" playsinline muted autoplay></video>
+      <div class="scan-frame"></div>
+    </div>
+    <p class="scan-msg" id="scan-msg" role="status" aria-live="polite">מכוונים את הברקוד אל המסגרת ומחזיקים יציב.</p>
+    <div class="row">
+      <label class="btn" for="scan-photo">צילום תמונה של הברקוד</label>
+      <input id="scan-photo" type="file" accept="image/*" capture="environment" hidden>
+      <button class="btn" type="button" data-close>ביטול</button>
+    </div>
   </div>
 </dialog>
 
@@ -901,16 +948,17 @@ textarea.note-in {
     formCover = b.cover || ""; formAi = !!b.aiSourced;
     setCoverPreview();
   }
-  function openForm(book) {
+  function openForm(book, noFocus) {
     editingId = book ? book.id : null;
     photoBlob = null;
     $("#form-title").textContent = book ? "עריכת כרטיס" : "ספר חדש בקטלוג";
     $("#save-btn").textContent = book ? "שמירת שינויים" : "שמירה בקטלוג";
+    $("#save-next").hidden = !!book;
     fillForm(book || {});
     setStatus("");
     updateAiUi();
     $("#form-dlg").showModal();
-    if (!book) setTimeout(() => F("isbn").focus(), 30);
+    if (!book && !noFocus) setTimeout(() => F("isbn").focus(), 30);
   }
   function setStatus(msg, kind) { const s = $("#lookup-status"); s.textContent = msg; s.className = "status-line" + (kind ? " " + kind : ""); }
   function updateAiUi() {
@@ -924,7 +972,12 @@ textarea.note-in {
     finally { clearTimeout(t); }
   }
   async function fromGoogle(isbn) {
-    const j = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+    // Keyless requests share Google's public daily quota and often fail; the family project's key has its own.
+    const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`;
+    const key = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey;
+    let j;
+    try { j = await fetchJson(key ? `${url}&key=${key}` : url); }
+    catch (e) { if (!key) throw e; j = await fetchJson(url); }
     const v = j.items && j.items[0] && j.items[0].volumeInfo; if (!v) return null;
     const img = v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail);
     return {
@@ -965,7 +1018,7 @@ Use the title and names as printed on the book (Hebrew script for Hebrew books).
     for (const [k, v] of Object.entries(a)) if (v && (!Array.isArray(v) || v.length)) out[k] = v;
     return out;
   }
-  async function lookup() {
+  async function lookup(fromScan) {
     const raw = cleanIsbn(F("isbn").value);
     if (!validIsbn(raw)) { setStatus("זה לא נראה כמו ISBN תקין. בודקים שיש 10 או 13 ספרות, בדיוק כמו בגב הספר.", "err"); return; }
     const isbn = toIsbn13(raw);
@@ -994,6 +1047,7 @@ Use the title and names as printed on the book (Hebrew script for Hebrew books).
     const keepCover = formCover;
     fillForm({ ...info, isbn, shelf: F("shelf").value, cover: info.cover || keepCover });
     setStatus(info.aiSourced ? "Claude זיהה את הספר. כדאי לעבור על הפרטים לפני השמירה." : "נמצא! עוברים על הפרטים ושומרים.", "ok");
+    if (fromScan === true) $("#save-btn").focus();
   }
 
   /* Photos: shrink to a small JPEG so it fits in the shared catalogue */
@@ -1054,11 +1108,132 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
       else {
         const book = { id: newId(), ...fields, reviews: {}, addedAt: Date.now(), addedBy: me || "" };
         await store.add(book); toast(`"${title}" נכנס לקטלוג`);
+        if (ev.submitter && ev.submitter.id === "save-next") { openForm(null, true); openScanner(); return; }
         $("#form-dlg").close(); openBook(book.id); return;
       }
       $("#form-dlg").close();
     } catch (e) { setStatus(dbErr(e), "err"); }
     finally { btn.disabled = false; }
+  }
+
+  /* ---------------- Barcode scanner ---------------- */
+  const scan = { stream: null, timer: null, decode: null, canvas: document.createElement("canvas"), lastBad: "" };
+  function loadZXing() {
+    if (window.ZXing) return Promise.resolve(window.ZXing);
+    return new Promise((res, rej) => {
+      const el = document.createElement("script");
+      el.src = "https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js";
+      el.onload = () => window.ZXing ? res(window.ZXing) : rej(new Error("zxing"));
+      el.onerror = rej; document.head.appendChild(el);
+    });
+  }
+  async function getDecoder() {
+    if (scan.decode) return scan.decode;
+    try {
+      if ("BarcodeDetector" in window) {
+        const fm = await BarcodeDetector.getSupportedFormats();
+        if (fm.includes("ean_13")) {
+          const det = new BarcodeDetector({ formats: ["ean_13", "upc_a"].filter(f => fm.includes(f)) });
+          return (scan.decode = async c => { const r = await det.detect(c); return r.length ? r[0].rawValue : null; });
+        }
+      }
+    } catch { /* fall through to ZXing */ }
+    const Z = await loadZXing();
+    const hints = new Map();
+    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.UPC_A]);
+    hints.set(Z.DecodeHintType.TRY_HARDER, true);
+    const reader = new Z.MultiFormatReader(); reader.setHints(hints);
+    return (scan.decode = async c => {
+      try { return reader.decodeWithState(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(c)))).getText(); }
+      catch { return null; }
+    });
+  }
+  function isbnFromCode(code) {
+    const c = cleanIsbn(code);
+    if (/^97[89]\d{10}$/.test(c) && validIsbn(c)) return c;
+    return null;
+  }
+  function scanMsg(t, err) { const m = $("#scan-msg"); m.textContent = t; m.className = "scan-msg" + (err ? " err" : ""); }
+  function stopScan() {
+    clearInterval(scan.timer); scan.timer = null;
+    if (scan.stream) { scan.stream.getTracks().forEach(t => t.stop()); scan.stream = null; }
+    const v = $("#scan-video"); v.srcObject = null;
+  }
+  function scanFound(isbn) {
+    stopScan();
+    $("#scan-view").classList.add("found");
+    try { navigator.vibrate && navigator.vibrate(80); } catch {}
+    setTimeout(() => {
+      $("#scan-dlg").close();
+      if (!$("#form-dlg").open) openForm(null, true);
+      F("isbn").value = prettyIsbn(isbn);
+      lookup(true);
+    }, 250);
+  }
+  function handleCode(code) {
+    const isbn = isbnFromCode(code);
+    if (isbn) { scanFound(isbn); return true; }
+    if (code && code !== scan.lastBad) { scan.lastBad = code; scanMsg("זה ברקוד של מוצר, לא של ספר. מחפשים את הברקוד שמתחיל ב־978 או 979.", true); }
+    return false;
+  }
+  async function openScanner() {
+    scan.lastBad = "";
+    $("#scan-view").classList.remove("found");
+    $("#scan-view").hidden = false;
+    scanMsg("מפעילים את המצלמה…");
+    const d = $("#scan-dlg"); if (!d.open) d.showModal();
+    getDecoder().catch(() => {});
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      $("#scan-view").hidden = true;
+      scanMsg("הדפדפן הזה לא מאפשר להשתמש במצלמה בתוך הדף. אפשר לצלם תמונה של הברקוד.", true); return;
+    }
+    try {
+      scan.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+    } catch (e) {
+      $("#scan-view").hidden = true;
+      scanMsg(e && e.name === "NotAllowedError"
+        ? "אין הרשאה למצלמה. אפשר לאשר אותה בהגדרות הדפדפן, או לצלם תמונה של הברקוד."
+        : "לא הצלחנו להפעיל את המצלמה. אפשר לצלם תמונה של הברקוד.", true);
+      return;
+    }
+    if (!d.open) { stopScan(); return; }
+    const v = $("#scan-video"); v.srcObject = scan.stream;
+    try { await v.play(); } catch {}
+    scanMsg("מכוונים את הברקוד אל המסגרת ומחזיקים יציב.");
+    let busy = false;
+    scan.timer = setInterval(async () => {
+      if (busy || !v.videoWidth) return;
+      busy = true;
+      try {
+        const decode = await getDecoder();
+        // Read the middle band of the picture, where the frame is drawn.
+        const c = scan.canvas, w = Math.min(960, v.videoWidth), sh = v.videoHeight * 0.5;
+        c.width = w; c.height = Math.round(sh * (w / v.videoWidth));
+        c.getContext("2d", { willReadFrequently: true }).drawImage(v, 0, v.videoHeight * 0.25, v.videoWidth, sh, 0, 0, c.width, c.height);
+        const code = await decode(c);
+        if (scan.timer) handleCode(code);
+      } catch { /* keep trying */ }
+      finally { busy = false; }
+    }, 220);
+  }
+  async function scanPhoto(file) {
+    scanMsg("קוראים את הברקוד מהתמונה…");
+    try {
+      const decode = await getDecoder();
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+      const c = document.createElement("canvas"), ctx = c.getContext("2d", { willReadFrequently: true });
+      const sc = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * sc), h = Math.round(img.naturalHeight * sc);
+      for (const rot of [0, 90]) {
+        c.width = rot ? h : w; c.height = rot ? w : h;
+        ctx.save(); if (rot) { ctx.translate(h, 0); ctx.rotate(Math.PI / 2); }
+        ctx.drawImage(img, 0, 0, w, h); ctx.restore();
+        const code = await decode(c);
+        if (code && handleCode(code)) { URL.revokeObjectURL(img.src); return; }
+      }
+      URL.revokeObjectURL(img.src);
+      scanMsg("לא מצאנו ברקוד בתמונה. מצלמים מקרוב, ישר ועם תאורה טובה.", true);
+    } catch { scanMsg("לא הצלחנו לקרוא את התמונה. אפשר להקליד את המספר ידנית.", true); }
   }
 
   /* ---------------- Who am I ---------------- */
@@ -1141,6 +1316,10 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
   $("#q").addEventListener("input", renderShelf);
   $("#sort").addEventListener("change", renderShelf);
   $("#lookup-btn").addEventListener("click", lookup);
+  $("#scan-btn").addEventListener("click", () => { openForm(null, true); openScanner(); });
+  $("#scan-in-form").addEventListener("click", openScanner);
+  $("#scan-dlg").addEventListener("close", stopScan);
+  $("#scan-photo").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) scanPhoto(f); });
   F("isbn").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); lookup(); } });
   F("title").addEventListener("input", setCoverPreview);
   F("authors").addEventListener("input", setCoverPreview);
