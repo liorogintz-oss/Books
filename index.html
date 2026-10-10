@@ -183,6 +183,15 @@ select.sort { padding: .62rem .7rem; border: 1px solid var(--line); border-radiu
 }
 .dot.done { background: var(--c); color: #fff; }
 .dot.reading { background: linear-gradient(90deg, transparent 50%, var(--c) 50%); color: var(--ink); }
+.copies { font-family: var(--f-mono); font-size: .72rem; padding: 0 .35rem; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); line-height: 1.2rem; }
+.dup-book { display: flex; gap: var(--s-4); align-items: center; }
+.dup-book .cover { width: 72px; flex: none; }
+.dup-book b { font-family: var(--f-display); font-size: 1.15rem; display: block; }
+.dup-book span { color: var(--muted); font-size: .9rem; }
+.dup-actions { display: grid; gap: var(--s-2); }
+.dup-actions .btn { justify-content: flex-start; text-align: start; padding-block: .7rem; }
+.dup-actions .btn small { display: block; font-weight: 400; color: var(--muted); font-size: .82rem; }
+.dup-actions .btn.primary small { color: var(--primary-ink); opacity: .8; }
 .avg { font-family: var(--f-mono); font-size: .78rem; color: var(--star); margin-inline-start: auto; }
 
 /* Empty / loading */
@@ -460,6 +469,7 @@ textarea.note-in {
         <div class="fld"><label for="f-year">שנה</label><input id="f-year" inputmode="numeric"></div>
         <div class="fld"><label for="f-pages">עמודים</label><input id="f-pages" inputmode="numeric"></div>
         <div class="fld"><label for="f-lang">שפה</label><input id="f-lang"></div>
+        <div class="fld"><label for="f-copies">עותקים בבית</label><input id="f-copies" type="number" min="1" max="99" inputmode="numeric"></div>
         <div class="fld wide"><label for="f-cats">נושאים / ז׳אנר (מופרדים בפסיק)</label><input id="f-cats"></div>
         <div class="fld wide"><label for="f-shelf">איפה הוא עומד בבית</label><input id="f-shelf" placeholder="למשל: הסלון, מדף עליון"></div>
         <div class="fld wide"><label for="f-desc">תקציר</label><textarea id="f-desc"></textarea></div>
@@ -517,6 +527,19 @@ textarea.note-in {
     <div id="lib-created" hidden>
       <p>הספרייה נוצרה. שלחו את הקישור הזה לרביד, עדי, קרן וליאור (למשל בוואטסאפ). מי שפותח אותו מתחבר לאותה ספרייה:</p>
       <div class="row"><input id="lib-link" class="mono" readonly style="flex:1 1 240px;min-width:0;padding:.5rem;border:1px solid var(--line);border-radius:4px;background:var(--bg-2)"><button class="btn" type="button" id="lib-copy">העתקה</button></div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Already in the catalogue -->
+<dialog id="dup-dlg" dir="rtl" lang="he" aria-label="הספר כבר בקטלוג">
+  <div class="sheet confirm">
+    <h2>הספר הזה כבר בקטלוג</h2>
+    <div class="dup-book" id="dup-book"></div>
+    <div class="dup-actions">
+      <button class="btn primary" type="button" id="dup-update"><span>עדכון הפרטים<small>מושכים מחדש שם, מחבר, תקציר וכריכה מהמאגרים. חוות הדעת נשמרות.</small></span></button>
+      <button class="btn" type="button" id="dup-copy"><span>הוספת עותק נוסף<small>יש לנו עוד עותק של הספר הזה בבית.</small></span></button>
+      <button class="btn" type="button" id="dup-mistake"><span>טעות בסריקה<small>לא משנים כלום<span id="dup-rescan-note">, וחוזרים לסרוק</span>.</small></span></button>
     </div>
   </div>
 </dialog>
@@ -788,7 +811,7 @@ textarea.note-in {
         <div class="book-meta">
           <span class="book-title">${esc(b.title)}</span>
           <span class="book-author">${esc((b.authors || []).join(", "))}</span>
-          <span class="stamps">${dots}${avg ? `<span class="avg">★ ${avg.toFixed(1)}</span>` : ""}${!revs.length ? "" : ""}</span>
+          <span class="stamps">${(b.copies || 1) > 1 ? `<span class="copies" title="${b.copies} עותקים">×${b.copies}</span>` : ""}${dots}${avg ? `<span class="avg">★ ${avg.toFixed(1)}</span>` : ""}${!revs.length ? "" : ""}</span>
         </div>
       </button>`;
     }).join("")}</div>`;
@@ -835,6 +858,7 @@ textarea.note-in {
       ["עמודים", b.pages],
       ["שפה", b.language],
       ["מדף", b.shelf],
+      ["עותקים", (b.copies || 1) > 1 ? b.copies : ""],
     ].filter(([, v]) => v);
     const added = `נכנס לקטלוג ${fmtDate(b.addedAt)}${b.addedBy && M[b.addedBy] ? ` · ע״י ${M[b.addedBy].he}` : ""}`;
     const desc = b.description || "";
@@ -956,6 +980,7 @@ textarea.note-in {
     F("publisher").value = b.publisher || ""; F("year").value = b.year || ""; F("pages").value = b.pages || "";
     F("lang").value = b.language || ""; F("cats").value = (b.categories || []).join(", ");
     F("shelf").value = b.shelf || ""; F("desc").value = b.description || "";
+    F("copies").value = b.copies || 1;
     formCover = b.cover || ""; formAi = !!b.aiSourced;
     setCoverPreview();
   }
@@ -968,7 +993,7 @@ textarea.note-in {
     fillForm(book || {});
     setStatus("");
     updateAiUi();
-    $("#form-dlg").showModal();
+    if (!$("#form-dlg").open) $("#form-dlg").showModal();
     if (!book && !noFocus) setTimeout(() => F("isbn").focus(), 30);
   }
   function setStatus(msg, kind) { const s = $("#lookup-status"); s.textContent = msg; s.className = "status-line" + (kind ? " " + kind : ""); }
@@ -1035,7 +1060,7 @@ Use the title and names as printed on the book (Hebrew script for Hebrew books).
     const isbn = toIsbn13(raw);
     F("isbn").value = prettyIsbn(isbn);
     const dup = store.books.find(b => b.isbn === isbn && b.id !== editingId);
-    if (dup) { setStatus(`הספר "${dup.title}" כבר נמצא בקטלוג.`, "err"); return; }
+    if (dup) { setStatus(""); openDup(dup, fromScan === true); return; }
     const btn = $("#lookup-btn"); btn.disabled = true;
     setStatus("מחפשים בקטלוגים…");
     let info = null, netOk = false;
@@ -1056,7 +1081,7 @@ Use the title and names as printed on the book (Hebrew script for Hebrew books).
       return;
     }
     const keepCover = formCover;
-    fillForm({ ...info, isbn, shelf: F("shelf").value, cover: info.cover || keepCover });
+    fillForm({ ...info, isbn, shelf: F("shelf").value, copies: F("copies").value, cover: keepCover.startsWith("data:") ? keepCover : (info.cover || keepCover) });
     setStatus(info.aiSourced ? "Claude זיהה את הספר. כדאי לעבור על הפרטים לפני השמירה." : "נמצא! עוברים על הפרטים ושומרים.", "ok");
     if (fromScan === true) $("#save-btn").focus();
   }
@@ -1105,13 +1130,14 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     const raw = cleanIsbn(F("isbn").value);
     const isbn = validIsbn(raw) ? toIsbn13(raw) : "";
     const dup = isbn && store.books.find(b => b.isbn === isbn && b.id !== editingId);
-    if (dup) { setStatus(`הספר "${dup.title}" כבר נמצא בקטלוג.`, "err"); return; }
+    if (dup) { openDup(dup, false); return; }
     const fields = {
       isbn, title, subtitle: F("subtitle").value.trim(), authors: splitList(F("authors").value),
       translator: F("translator").value.trim(), publisher: F("publisher").value.trim(),
       year: F("year").value.trim(), pages: parseInt(F("pages").value, 10) || null, language: F("lang").value.trim(),
       categories: splitList(F("cats").value), shelf: F("shelf").value.trim(), description: F("desc").value.trim(),
       cover: formCover, aiSourced: formAi,
+      copies: Math.min(99, Math.max(1, parseInt(F("copies").value, 10) || 1)),
     };
     const btn = $("#save-btn"); btn.disabled = true;
     try {
@@ -1126,6 +1152,36 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     } catch (e) { setStatus(dbErr(e), "err"); }
     finally { btn.disabled = false; }
   }
+
+  /* ---------------- Already in the catalogue ---------------- */
+  let dupBook = null, dupFromScan = false;
+  function openDup(book, fromScan) {
+    dupBook = book; dupFromScan = !!fromScan;
+    const n = book.copies || 1;
+    $("#dup-book").innerHTML = `<div class="cover">${coverHtml(book)}</div><div style="min-width:0"><b>${esc(book.title)}</b><span>${esc((book.authors || []).join(", "))}${n > 1 ? ` · ${n} עותקים` : ""}</span></div>`;
+    $("#dup-rescan-note").hidden = !dupFromScan;
+    $("#dup-dlg").showModal();
+  }
+  function resetNewForm() { F("isbn").value = ""; setStatus(""); }
+  $("#dup-update").addEventListener("click", () => {
+    const b = dupBook; $("#dup-dlg").close();
+    openForm(b, true);
+    lookup().then(() => { if ($("#lookup-status").classList.contains("ok")) setStatus("הפרטים עודכנו מהמאגרים. עוברים עליהם ושומרים.", "ok"); });
+  });
+  $("#dup-copy").addEventListener("click", async () => {
+    const b = dupBook; $("#dup-dlg").close();
+    const n = (b.copies || 1) + 1;
+    try {
+      await store.update(b.id, { copies: n });
+      toast(`נוסף עותק. יש עכשיו ${n} עותקים של "${b.title}"`);
+      resetNewForm();
+      if (dupFromScan) openScanner(); else { $("#form-dlg").close(); openBook(b.id); }
+    } catch (e) { setStatus(dbErr(e), "err"); }
+  });
+  $("#dup-mistake").addEventListener("click", () => {
+    $("#dup-dlg").close(); resetNewForm();
+    if (dupFromScan) openScanner(); else F("isbn").focus();
+  });
 
   /* ---------------- Barcode scanner ---------------- */
   const scan = { stream: null, timer: null, decode: null, canvas: document.createElement("canvas"), lastBad: "" };
