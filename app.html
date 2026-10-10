@@ -241,6 +241,8 @@ dialog::backdrop { background: rgb(15 22 19 / .55); backdrop-filter: blur(2px); 
 .gr-quick { display: inline-flex; gap: var(--s-1); align-items: center; }
 .gr-quick input { width: 4.6rem; padding: .25rem .4rem; border: 1px solid var(--line); border-radius: 4px; background: var(--card); font-family: var(--f-mono); direction: ltr; }
 .gr-quick .btn { padding: .25rem .6rem; }
+.tag.genre { background: var(--primary); color: var(--primary-ink); border-color: transparent; font-weight: 600; }
+.book-genre { font-size: .78rem; color: var(--primary); font-weight: 600; }
 .tags { display: flex; gap: var(--s-1); flex-wrap: wrap; margin-top: var(--s-3); }
 .tag { font-size: .78rem; padding: 0 .5rem; border-radius: 3px; background: var(--bg-2); border: 1px solid var(--line); line-height: 1.5rem; }
 .card-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-5); }
@@ -398,6 +400,7 @@ textarea.note-in {
       <input id="q" type="search" placeholder="חיפוש לפי שם, מחבר או ISBN" aria-label="חיפוש">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
     </div>
+    <select id="genre" class="sort" aria-label="ז׳אנר"><option value="">כל הז׳אנרים</option></select>
     <select id="sort" class="sort" aria-label="מיון">
       <option value="added">נוספו לאחרונה</option>
       <option value="title">לפי שם</option>
@@ -490,7 +493,8 @@ textarea.note-in {
         <div class="fld"><label for="f-lang">שפת הספר</label><select id="f-lang" class="sort"><option value="">לא ידוע</option><option value="עברית">עברית</option><option value="אנגלית">אנגלית</option></select></div>
         <div class="fld"><label for="f-gr">דירוג ב־Goodreads (מתוך 5)</label><input id="f-gr" type="number" min="0" max="5" step="0.01" inputmode="decimal" placeholder="למשל 4.12"><a class="ext" id="f-gr-link" href="https://www.goodreads.com/" target="_blank" rel="noopener">בדיקה ב־Goodreads ↗</a></div>
         <div class="fld"><label for="f-copies">עותקים בבית</label><input id="f-copies" type="number" min="1" max="99" inputmode="numeric"></div>
-        <div class="fld wide"><label for="f-cats">נושאים / ז׳אנר (מופרדים בפסיק)</label><input id="f-cats"></div>
+        <div class="fld wide"><label for="f-genres">ז׳אנר (מופרדים בפסיק)</label><input id="f-genres" placeholder="למשל: רומן היסטורי, דרמה משפחתית"></div>
+        <div class="fld wide"><label for="f-cats">נושאים (מופרדים בפסיק)</label><input id="f-cats"></div>
         <div class="fld wide"><label for="f-shelf">איפה הוא עומד בבית</label><input id="f-shelf" placeholder="למשל: הסלון, מדף עליון"></div>
         <div class="fld wide"><label for="f-desc">תקציר</label><textarea id="f-desc"></textarea></div>
         <div class="fld wide"><label for="f-backtext">הטקסט מהכריכה האחורית</label><textarea id="f-backtext" placeholder="מצלמים את הכריכה האחורית, והטקסט שעליה יופיע כאן"></textarea></div>
@@ -789,11 +793,13 @@ textarea.note-in {
   function visibleBooks() {
     const q = $("#q").value.trim().toLowerCase();
     const qIsbn = cleanIsbn(q);
+    const genre = $("#genre").value;
     let list = store.books.filter(b => {
+      if (genre && !(b.genres || []).includes(genre)) return false;
       if (filter === "unread" && reviewsOf(b).some(([, v]) => v.status === "done")) return false;
       if (["want", "reading", "done"].includes(filter) && !(b.reviews && b.reviews[me] && b.reviews[me].status === filter)) return false;
       if (!q) return true;
-      const hay = [b.title, b.subtitle, ...(b.authors || []), b.publisher, ...(b.categories || []), b.backText || ""].join(" ").toLowerCase();
+      const hay = [b.title, b.subtitle, ...(b.authors || []), b.publisher, ...(b.categories || []), ...(b.genres || []), b.backText || ""].join(" ").toLowerCase();
       return hay.includes(q) || (qIsbn.length >= 4 && (b.isbn || "").includes(qIsbn));
     });
     const sort = $("#sort").value;
@@ -841,6 +847,7 @@ textarea.note-in {
         <div class="book-meta">
           <span class="book-title">${esc(b.title)}</span>
           <span class="book-author">${esc((b.authors || []).join(", "))}</span>
+          ${(b.genres || []).length ? `<span class="book-genre">${esc(b.genres.slice(0, 2).join(" · "))}</span>` : ""}
           <span class="stamps">${(b.copies || 1) > 1 ? `<span class="copies" title="${b.copies} עותקים">×${b.copies}</span>` : ""}${dots}${avg ? `<span class="avg">★ ${avg.toFixed(1)}</span>` : ""}${!revs.length ? "" : ""}</span>
         </div>
       </button>`;
@@ -861,34 +868,46 @@ textarea.note-in {
     if (store.mode === "shared") { note.textContent = "הקטלוג משותף: כל מי שפותח את הדף רואה את אותם ספרים ואת אותן חוות דעת."; $("#local-tools").hidden = true; }
     else if (store.mode === "local") { note.textContent = "הקטלוג נשמר בדפדפן הזה. כדאי לגבות אותו לקובץ מדי פעם."; $("#local-tools").hidden = false; }
   }
-  const needsGb = b => b.isbn && !b.gbChecked && !b.gbRating;
+  const needsOl = b => b.isbn && !b.olChecked;
+  function renderGenreFilter() {
+    const sel = $("#genre"), cur = sel.value;
+    const all = [...new Set(store.books.flatMap(b => b.genres || []))].sort(new Intl.Collator("he").compare);
+    sel.innerHTML = `<option value="">כל הז׳אנרים</option>` + all.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
+    sel.value = all.includes(cur) ? cur : "";
+    sel.hidden = !all.length;
+  }
   function renderGbButton() {
-    const n = store.books.filter(needsGb).length, btn = $("#gb-fill");
+    const n = store.books.filter(needsOl).length, btn = $("#gb-fill");
     btn.hidden = !n || (store.mode === "firebase" && !store.lib);
-    if (!btn.disabled) btn.textContent = `השלמת דירוגי Google Books (${n} ספרים)`;
+    if (!btn.disabled) btn.textContent = `השלמת דירוג, תקציר וז׳אנר מ־Open Library (${n} ספרים)`;
   }
   async function fillGoogleRatings() {
     const btn = $("#gb-fill"); if (btn.disabled) return;
-    const todo = store.books.filter(needsGb);
+    const todo = store.books.filter(needsOl);
     btn.disabled = true;
-    let found = 0, done = 0, failed = 0;
-    for (const b of todo) {
-      btn.textContent = `בודקים דירוגים ב־Google Books… ${done + 1}/${todo.length}`;
-      try {
-        const info = await fromGoogle(b.isbn);
-        const patch = { gbChecked: Date.now() };
-        if (info && info.gbRating) { patch.gbRating = info.gbRating; found++; }
-        await store.update(b.id, patch);
-      } catch (e) { console.warn(e); failed++; }
-      done++;
+    let rated = 0, desc = 0, genred = 0, failed = 0;
+    for (let i = 0; i < todo.length; i++) {
+      const b = todo[i];
+      btn.textContent = `משלימים פרטים מ־Open Library… ${i + 1}/${todo.length}`;
+      let w = null;
+      try { w = await olWorkInfo(b.isbn); }
+      catch (e) { if (e && e.message !== "404") { failed++; continue; } }   // 404: not in Open Library
+      const patch = { olChecked: Date.now() };
+      if (w && w.olRating) { patch.olRating = w.olRating; rated++; }
+      if (w && w.description && !b.description) { patch.description = w.description; desc++; }
+      if (!(b.genres || []).length) {
+        const g = deriveGenres([...(b.categories || []), ...((w && w.subjects) || [])]);
+        if (g.length) { patch.genres = g; genred++; }
+      }
+      try { await store.update(b.id, patch); } catch (e) { console.warn(e); failed++; }
       await new Promise(r => setTimeout(r, 250));
     }
     btn.disabled = false; renderGbButton();
-    toast(failed === todo.length ? "לא הצלחנו להתחבר ל־Google Books. נסו שוב מאוחר יותר."
-      : `נבדקו ${done - failed} ספרים. ל־${found} מהם נמצא דירוג ב־Google Books.`);
+    toast(failed === todo.length ? "לא הצלחנו להתחבר ל־Open Library. נסו שוב מאוחר יותר."
+      : `עודכנו ${todo.length - failed} ספרים: ${rated} קיבלו דירוג, ${desc} קיבלו תקציר, ${genred} קיבלו ז׳אנר.`);
   }
   function render() {
-    renderGbButton();
+    renderGbButton(); renderGenreFilter();
     renderReaders(); renderDrawers(); renderShelf(); renderCounters(); renderMode();
     if (openId && $("#book-dlg").open) renderBookCard();
   }
@@ -978,10 +997,11 @@ textarea.note-in {
               ${b.grRating ? `<span class="rating-pill">Goodreads <b>★ ${Number(b.grRating).toFixed(2)}</b></span>`
                 : `<span class="gr-quick"><label for="gr-quick">דירוג Goodreads:</label><input id="gr-quick" inputmode="decimal" placeholder="4.12"><button class="btn" type="button" data-action="save-gr">שמירה</button></span>`}
               <a class="ext" href="${esc(goodreadsUrl(b))}" target="_blank" rel="noopener">${b.grRating ? "לעמוד ב־Goodreads" : "בדיקה ב־Goodreads"} ↗</a>
+              ${b.olRating ? `<span class="rating-pill">Open Library <b>★ ${Number(b.olRating.avg).toFixed(1)}</b><small>${b.olRating.count} דירוגים</small></span>` : ""}
               ${b.gbRating ? `<span class="rating-pill">Google Books <b>★ ${Number(b.gbRating.avg).toFixed(1)}</b><small>${b.gbRating.count ? `${b.gbRating.count} דירוגים` : ""}</small></span>` : ""}
             </div>
             <dl class="fields">${fields.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-            ${(b.categories || []).length ? `<div class="tags">${b.categories.map(c => `<span class="tag">${esc(c)}</span>`).join("")}</div>` : ""}
+            ${(b.genres || []).length ? `<div class="tags">${b.genres.map(c => `<span class="tag genre">${esc(c)}</span>`).join("")}</div>` : ""}
             ${desc ? `<div class="desc ${long && !descOpen ? "clamped" : ""}">${esc(desc)}</div>${long ? `<button class="linkish" type="button" data-action="toggle-desc">${descOpen ? "פחות" : "להמשך התקציר"}</button>` : ""}` : ""}
             ${b.backText ? `<h3 class="sect">מהכריכה האחורית</h3><div class="desc">${esc(b.backText)}</div>` : ""}
             ${b.aiSourced ? `<p class="status-line" style="margin-top:.6rem">הפרטים זוהו על ידי Claude. כדאי לוודא מול הספר.</p>` : ""}
@@ -1034,7 +1054,7 @@ textarea.note-in {
   let formCover = "";
   let photoBlob = null;
   let formAi = false;
-  let formBack = "", backFile = null, formGb = null;
+  let formBack = "", backFile = null, formGb = null, formOl = null, formOlChecked = 0;
   function updateGrLink() {
     const raw = cleanIsbn(F("isbn").value);
     $("#f-gr-link").href = goodreadsUrl({ isbn: validIsbn(raw) ? toIsbn13(raw) : "", title: F("title").value.trim(), authors: splitList(F("authors").value) });
@@ -1060,7 +1080,8 @@ textarea.note-in {
     F("lang").value = normLang(b.language) || guessLang(b.title); F("cats").value = (b.categories || []).join(", ");
     F("shelf").value = b.shelf || ""; F("desc").value = b.description || "";
     F("copies").value = b.copies || 1;
-    F("gr").value = b.grRating || ""; formGb = b.gbRating || null; updateGrLink();
+    F("gr").value = b.grRating || ""; formGb = b.gbRating || null; formOl = b.olRating || null; updateGrLink();
+    F("genres").value = Array.isArray(b.genres) ? b.genres.join(", ") : (b.genres || "");
     F("backtext").value = b.backText || "";
     formCover = b.cover || ""; formAi = !!b.aiSourced;
     formBack = b.backCover || "";
@@ -1068,7 +1089,7 @@ textarea.note-in {
   }
   function openForm(book, noFocus) {
     editingId = book ? book.id : null;
-    photoBlob = null; backFile = null;
+    photoBlob = null; backFile = null; formOlChecked = 0;
     $("#back-status").textContent = "";
     $("#form-title").textContent = book ? "עריכת כרטיס" : "ספר חדש בקטלוג";
     $("#save-btn").textContent = book ? "שמירת שינויים" : "שמירה בקטלוג";
@@ -1117,6 +1138,55 @@ textarea.note-in {
       description: typeof v.notes === "string" ? v.notes : "",
       cover: v.cover ? (v.cover.large || v.cover.medium) : "",
     };
+  }
+  /* Genres: catalogue subjects arrive in English and noisy; map them to a few Hebrew genres. */
+  const GENRE_RULES = [
+    [/histor|world war|vietnam war|civil war|holocaust|civilians in war|1[6-9]th century/, "רומן היסטורי", "היסטוריה"],
+    [/romance|love stories|man-woman relationships/, "רומנטיקה"],
+    [/thriller|suspense|mystery|detective|crime|murder/, "מתח"],
+    [/fantasy|magical realism/, "פנטזיה"],
+    [/science fiction/, "מדע בדיוני"],
+    [/young adult|juvenile/, "נוער"],
+    [/children's|picture book/, "ילדים"],
+    [/family|mothers and daughters|fathers and|sisters|brothers|domestic|marriage|foster|widow|divorce/, "דרמה משפחתית"],
+    [/humor|humorous|comedy/, "הומור"],
+    [/horror/, "אימה"],
+    [/biography|autobiography|memoir/, "ביוגרפיה"],
+    [/self-help/, "עזרה עצמית"],
+    [/psycholog/, "פסיכולוגיה"],
+    [/cooking|cookbook/, "בישול"],
+    [/poetry/, "שירה"],
+    [/literary fiction|literature/, "ספרות יפה"],
+  ];
+  function deriveGenres(subjects) {
+    const subs = (subjects || []).map(x => String(x).toLowerCase());
+    const fiction = subs.some(x => /fiction|novel|romance|literature|stories/.test(x));
+    const out = [];
+    for (const [re, g, nonFiction] of GENRE_RULES) {
+      if (out.length >= 3) break;
+      if (subs.some(x => re.test(x))) { const name = fiction || !nonFiction ? g : nonFiction; if (!out.includes(name)) out.push(name); }
+    }
+    if (!out.length && fiction) out.push("סיפורת");
+    return out;
+  }
+  function cleanOlText(t) {
+    if (!t) return "";
+    return String(t).split(/\n-{4,}/)[0]
+      .replace(/\(\[source\]\[\d+\]\)/gi, "").replace(/^\s*\[\d+\]:\s*\S+\s*$/gm, "")
+      .replace(/\[([^\]]+)\]\[\d+\]/g, "$1").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  // Rating, description and subjects live on the Open Library "work" (all editions of a book).
+  async function olWorkInfo(isbn) {
+    const ed = await fetchJson(`https://openlibrary.org/isbn/${isbn}.json`);
+    const wk = ed && ed.works && ed.works[0] && ed.works[0].key;
+    const out = { subjects: ed.subjects || [], description: cleanOlText(typeof ed.description === "string" ? ed.description : ed.description && ed.description.value), olRating: null };
+    if (!wk) return out;
+    const [w, r] = await Promise.allSettled([fetchJson(`https://openlibrary.org${wk}.json`), fetchJson(`https://openlibrary.org${wk}/ratings.json`)]);
+    const work = w.value || {}, sum = r.value && r.value.summary;
+    out.subjects = [...(work.subjects || []), ...out.subjects];
+    out.description = cleanOlText(typeof work.description === "string" ? work.description : work.description && work.description.value) || out.description;
+    if (sum && sum.average && sum.count) out.olRating = { avg: Math.round(sum.average * 100) / 100, count: sum.count };
+    return out;
   }
   function goodreadsUrl(b) {
     if (b.isbn) return "https://www.goodreads.com/book/isbn/" + b.isbn;
@@ -1177,13 +1247,24 @@ Use the title and names as printed on the book (Hebrew script for Hebrew books).
       try { info = await fromClaude(isbn); }
       catch (e) { if (e && e.code === "not_granted") store.sample = null; }
     }
+    formOlChecked = 0;
+    if (info) {
+      try {
+        const w = await olWorkInfo(isbn);
+        if (!info.description && w.description) info.description = w.description;
+        if (w.olRating) info.olRating = w.olRating;
+        info.genres = deriveGenres([...(info.categories || []), ...w.subjects]);
+        if (!info.genres.length && info.aiSourced) info.genres = (info.categories || []).slice(0, 3);
+        formOlChecked = Date.now();
+      } catch { info.genres = info.aiSourced ? (info.categories || []).slice(0, 3) : deriveGenres(info.categories); }
+    }
     btn.disabled = false;
     if (!info) {
       setStatus("לא מצאנו את הספר הזה. אפשר למלא את הפרטים ידנית, או לצלם את הכריכה.", "err");
       return;
     }
     const keepCover = formCover;
-    fillForm({ ...info, isbn, shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, backText: F("backtext").value, grRating: F("gr").value, gbRating: info.gbRating || formGb, cover: keepCover.startsWith("data:") ? keepCover : (info.cover || keepCover) });
+    fillForm({ ...info, isbn, shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, backText: F("backtext").value, grRating: F("gr").value, gbRating: info.gbRating || formGb, olRating: info.olRating || formOl, genres: (info.genres && info.genres.length) ? info.genres : splitList(F("genres").value), cover: keepCover.startsWith("data:") ? keepCover : (info.cover || keepCover) });
     setStatus(info.aiSourced ? "Claude זיהה את הספר. כדאי לעבור על הפרטים לפני השמירה." : "נמצא! עוברים על הפרטים ושומרים.", "ok");
     if (fromScan === true) $("#save-btn").focus();
   }
@@ -1217,7 +1298,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
         { images: photoBlob, modelTier: "default" });
       if (!r || !r.found) { setStatus("לא הצלחנו לזהות ספר בתמונה. נסו צילום חד יותר של הכריכה או של הברקוד.", "err"); return; }
       const isbn = cleanIsbn(r.isbn);
-      fillForm({ ...r, isbn: validIsbn(isbn) ? toIsbn13(isbn) : "", shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, backText: F("backtext").value, grRating: F("gr").value, gbRating: formGb, cover: formCover, aiSourced: true });
+      fillForm({ ...r, isbn: validIsbn(isbn) ? toIsbn13(isbn) : "", shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, backText: F("backtext").value, grRating: F("gr").value, gbRating: formGb, olRating: formOl, genres: splitList(F("genres").value).length ? splitList(F("genres").value) : (r.categories || []), cover: formCover, aiSourced: true });
       setStatus("זוהה מהתמונה. כדאי לעבור על הפרטים לפני השמירה.", "ok");
     } catch (e) {
       if (e && e.code === "not_granted") { store.sample = null; updateAiUi(); setStatus("הזיהוי מתמונה לא אושר. אפשר למלא ידנית.", "err"); }
@@ -1303,9 +1384,10 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
       categories: splitList(F("cats").value), shelf: F("shelf").value.trim(), description: F("desc").value.trim(),
       cover: formCover, aiSourced: formAi,
       backCover: formBack, backText: F("backtext").value.trim(),
-      grRating: parseRating(F("gr").value), gbRating: formGb,
+      grRating: parseRating(F("gr").value), gbRating: formGb, olRating: formOl, genres: splitList(F("genres").value),
       copies: Math.min(99, Math.max(1, parseInt(F("copies").value, 10) || 1)),
     };
+    if (formOlChecked) fields.olChecked = formOlChecked;
     const btn = $("#save-btn"); btn.disabled = true;
     try {
       if (editingId) { await store.update(editingId, fields); toast("הכרטיס עודכן"); }
@@ -1559,6 +1641,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
   $("#add-btn").addEventListener("click", () => openForm(null));
   $("#q").addEventListener("input", renderShelf);
   $("#sort").addEventListener("change", renderShelf);
+  $("#genre").addEventListener("change", renderShelf);
   $("#lookup-btn").addEventListener("click", lookup);
   $("#scan-btn").addEventListener("click", () => { openForm(null, true); openScanner(); });
   $("#scan-in-form").addEventListener("click", openScanner);
