@@ -423,7 +423,7 @@ textarea.note-in {
     <select id="sort" class="sort" aria-label="מיון">
       <option value="added">נוספו לאחרונה</option>
       <option value="title">לפי שם</option>
-      <option value="author">לפי מחבר</option>
+      <option value="author">לפי שם משפחה של המחבר</option>
       <option value="rating">לפי דירוג המשפחה</option>
       <option value="goodreads">לפי דירוג Goodreads</option>
     </select>
@@ -857,6 +857,19 @@ textarea.note-in {
       `<button class="drawer" type="button" data-filter="${k}" aria-pressed="${filter === k}">${esc(label)}<span class="n">${n}</span></button>`
     ).join("");
   }
+  // Sort key for an author: surname first ("Hannah Kristin"), then the full name as a tie-break.
+  function surnameKey(book) {
+    let name = String((book.authors || [])[0] || "").trim();
+    if (!name) return "\uffff";
+    name = name.replace(/,\s*(ph\.?d\.?|m\.?d\.?|jr\.?|sr\.?)\s*$/i, "");
+    if (name.includes(",")) return name.split(",")[0].trim() + " " + name;
+    const words = name
+      .replace(/\s*\((.*?)\)\s*/g, " ")
+      .split(/\s+/)
+      .filter(w => w && !/^(ph\.?d\.?|m\.?d\.?|jr\.?|sr\.?|ii|iii|iv|dr\.?|prof\.?|rabbi|הרב|ד["״']?ר|פרופ['׳]?|פרופסור)$/i.test(w));
+    if (!words.length) return name;
+    return words[words.length - 1] + " " + words.slice(0, -1).join(" ");
+  }
   function visibleBooks() {
     const q = $("#q").value.trim().toLowerCase();
     const qIsbn = cleanIsbn(q);
@@ -873,7 +886,7 @@ textarea.note-in {
     const coll = new Intl.Collator("he");
     list.sort((a, b) =>
       sort === "title" ? coll.compare(a.title || "", b.title || "") :
-      sort === "author" ? coll.compare((a.authors || [])[0] || "", (b.authors || [])[0] || "") :
+      sort === "author" ? coll.compare(surnameKey(a), surnameKey(b)) || coll.compare(a.title || "", b.title || "") :
       sort === "rating" ? avgRating(b) - avgRating(a) :
       sort === "goodreads" ? (b.grRating || 0) - (a.grRating || 0) :
       (b.addedAt || 0) - (a.addedAt || 0));
