@@ -234,8 +234,8 @@ dialog::backdrop { background: rgb(15 22 19 / .55); backdrop-filter: blur(2px); 
 }
 .callno { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-3); height: 2.5rem; flex-wrap: wrap; padding-inline-end: 2.6rem; }
 .callno .mono { font-size: .82rem; color: var(--muted); }
-.card-body { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: var(--s-5); margin-top: var(--s-5); }
-@media (max-width: 600px) { .card-body { grid-template-columns: 1fr; } .card-body .cover { max-width: 170px; } }
+.card-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-5); margin-top: var(--s-5); }
+@media (max-width: 600px) { .card-body { grid-template-columns: 1fr; } .covers .cover { flex: 1 1 0; max-width: 170px; } }
 .card-body h2 { font-size: clamp(1.5rem, 4vw, 2.1rem); font-weight: 900; }
 .card-body .sub { color: var(--muted); font-family: var(--f-display); font-size: 1.1rem; margin-top: var(--s-1); }
 .fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 var(--s-4); margin: var(--s-4) 0 0; line-height: 1.7rem; }
@@ -311,6 +311,15 @@ textarea.note-in {
   width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: .5rem .7rem; background: var(--card);
 }
 .fld textarea { min-height: 6rem; resize: vertical; }
+.covers { display: flex; gap: var(--s-3); align-items: flex-start; }
+.covers .cover { width: 160px; flex: 0 1 160px; min-width: 0; }
+.cover.zoomable { cursor: zoom-in; padding: 0; border: 0; display: block; }
+.cover .face-label { position: absolute; z-index: 3; bottom: 6px; inset-inline-start: 6px; font-size: .7rem; background: rgb(0 0 0 / .55); color: #fff; padding: 0 .4rem; border-radius: 3px; }
+.cover.back-empty { box-shadow: none; border: 1.5px dashed var(--line); display: grid; place-items: center; color: var(--muted); font-size: .8rem; text-align: center; padding: var(--s-2); }
+.sect { font-family: var(--f-display); font-size: 1.1rem; margin-top: 1.7rem; }
+.sect + .desc { margin-top: .4rem; }
+#zoom-dlg { width: min(900px, calc(100vw - 24px)); }
+#zoom-dlg img { display: block; width: 100%; height: auto; max-height: calc(100dvh - 40px); object-fit: contain; border-radius: 4px; background: #000; }
 .cover-pick { display: flex; gap: var(--s-4); align-items: center; flex-wrap: wrap; }
 .cover-pick .cover { width: 96px; flex: none; }
 .cover-pick .btns { display: grid; gap: var(--s-2); }
@@ -460,6 +469,17 @@ textarea.note-in {
         </div>
       </div>
 
+      <div class="cover-pick">
+        <div class="cover" id="f-back-prev"></div>
+        <div class="btns">
+          <label class="btn" for="f-back-photo">צילום הכריכה האחורית</label>
+          <input id="f-back-photo" type="file" accept="image/*" capture="environment" hidden>
+          <button class="btn ghost" type="button" id="back-ocr-btn" hidden>קריאת הטקסט מחדש</button>
+          <button class="linkish" type="button" id="back-clear" hidden>הסרת התמונה</button>
+        </div>
+      </div>
+      <p class="status-line" id="back-status" role="status" aria-live="polite"></p>
+
       <div class="grid-2">
         <div class="fld wide"><label for="f-title">שם הספר *</label><input id="f-title" required></div>
         <div class="fld wide"><label for="f-subtitle">כותרת משנה</label><input id="f-subtitle"></div>
@@ -473,6 +493,7 @@ textarea.note-in {
         <div class="fld wide"><label for="f-cats">נושאים / ז׳אנר (מופרדים בפסיק)</label><input id="f-cats"></div>
         <div class="fld wide"><label for="f-shelf">איפה הוא עומד בבית</label><input id="f-shelf" placeholder="למשל: הסלון, מדף עליון"></div>
         <div class="fld wide"><label for="f-desc">תקציר</label><textarea id="f-desc"></textarea></div>
+        <div class="fld wide"><label for="f-backtext">הטקסט מהכריכה האחורית</label><textarea id="f-backtext" placeholder="מצלמים את הכריכה האחורית, והטקסט שעליה יופיע כאן"></textarea></div>
       </div>
       <div class="form-foot">
         <button class="btn primary" type="submit" id="save-btn">שמירה בקטלוג</button>
@@ -541,6 +562,14 @@ textarea.note-in {
       <button class="btn" type="button" id="dup-copy"><span>הוספת עותק נוסף<small>יש לנו עוד עותק של הספר הזה בבית.</small></span></button>
       <button class="btn" type="button" id="dup-mistake"><span>טעות בסריקה<small>לא משנים כלום<span id="dup-rescan-note">, וחוזרים לסרוק</span>.</small></span></button>
     </div>
+  </div>
+</dialog>
+
+<!-- Cover zoom -->
+<dialog id="zoom-dlg" dir="rtl" lang="he" aria-label="כריכה בגודל מלא">
+  <div class="sheet" style="background:#000;position:relative">
+    <button class="close" type="button" data-close aria-label="סגירה">×</button>
+    <img id="zoom-img" alt="">
   </div>
 </dialog>
 
@@ -764,7 +793,7 @@ textarea.note-in {
       if (filter === "unread" && reviewsOf(b).some(([, v]) => v.status === "done")) return false;
       if (["want", "reading", "done"].includes(filter) && !(b.reviews && b.reviews[me] && b.reviews[me].status === filter)) return false;
       if (!q) return true;
-      const hay = [b.title, b.subtitle, ...(b.authors || []), b.publisher, ...(b.categories || [])].join(" ").toLowerCase();
+      const hay = [b.title, b.subtitle, ...(b.authors || []), b.publisher, ...(b.categories || []), b.backText || ""].join(" ").toLowerCase();
       return hay.includes(q) || (qIsbn.length >= 4 && (b.isbn || "").includes(qIsbn));
     });
     const sort = $("#sort").value;
@@ -910,13 +939,17 @@ textarea.note-in {
       <article class="index-card">
         <div class="callno"><span class="mono">${esc(callNo)}</span><span class="mono">ISBN ${esc(prettyIsbn(b.isbn) || "—")}</span></div>
         <div class="card-body">
-          <div class="cover">${coverHtml(b)}</div>
+          <div class="covers">
+            ${b.cover ? `<button type="button" class="cover zoomable" data-zoom="front" aria-label="הכריכה הקדמית בגודל מלא">${coverHtml(b)}${b.backCover ? `<span class="face-label">קדמית</span>` : ""}</button>` : `<div class="cover">${coverHtml(b)}</div>`}
+            ${b.backCover ? `<button type="button" class="cover zoomable" data-zoom="back" aria-label="הכריכה האחורית בגודל מלא"><img src="${esc(b.backCover)}" alt=""><span class="face-label">אחורית</span></button>` : ""}
+          </div>
           <div style="min-width:0">
             <h2>${esc(b.title)}</h2>
             ${b.subtitle ? `<div class="sub">${esc(b.subtitle)}</div>` : ""}
             <dl class="fields">${fields.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
             ${(b.categories || []).length ? `<div class="tags">${b.categories.map(c => `<span class="tag">${esc(c)}</span>`).join("")}</div>` : ""}
             ${desc ? `<div class="desc ${long && !descOpen ? "clamped" : ""}">${esc(desc)}</div>${long ? `<button class="linkish" type="button" data-action="toggle-desc">${descOpen ? "פחות" : "להמשך התקציר"}</button>` : ""}` : ""}
+            ${b.backText ? `<h3 class="sect">מהכריכה האחורית</h3><div class="desc">${esc(b.backText)}</div>` : ""}
             ${b.aiSourced ? `<p class="status-line" style="margin-top:.6rem">הפרטים זוהו על ידי Claude. כדאי לוודא מול הספר.</p>` : ""}
             <div class="card-actions">
               <button class="btn" type="button" data-action="edit">עריכת פרטים</button>
@@ -967,7 +1000,15 @@ textarea.note-in {
   let formCover = "";
   let photoBlob = null;
   let formAi = false;
+  let formBack = "", backFile = null;
   const F = id => $("#f-" + id);
+  function setBackPreview() {
+    const el = $("#f-back-prev");
+    el.className = "cover" + (formBack ? "" : " back-empty");
+    el.innerHTML = formBack ? `<img src="${esc(formBack)}" alt="">` : "כריכה אחורית";
+    $("#back-clear").hidden = !formBack;
+    $("#back-ocr-btn").hidden = !backFile;
+  }
   function setCoverPreview() {
     const title = F("title").value.trim();
     $("#f-cover-prev").innerHTML = coverHtml({ title: title || "שם הספר", authors: splitList(F("authors").value), cover: formCover });
@@ -981,12 +1022,15 @@ textarea.note-in {
     F("lang").value = b.language || ""; F("cats").value = (b.categories || []).join(", ");
     F("shelf").value = b.shelf || ""; F("desc").value = b.description || "";
     F("copies").value = b.copies || 1;
+    F("backtext").value = b.backText || "";
     formCover = b.cover || ""; formAi = !!b.aiSourced;
-    setCoverPreview();
+    formBack = b.backCover || "";
+    setCoverPreview(); setBackPreview();
   }
   function openForm(book, noFocus) {
     editingId = book ? book.id : null;
-    photoBlob = null;
+    photoBlob = null; backFile = null;
+    $("#back-status").textContent = "";
     $("#form-title").textContent = book ? "עריכת כרטיס" : "ספר חדש בקטלוג";
     $("#save-btn").textContent = book ? "שמירת שינויים" : "שמירה בקטלוג";
     $("#save-next").hidden = !!book;
@@ -1081,22 +1125,22 @@ Use the title and names as printed on the book (Hebrew script for Hebrew books).
       return;
     }
     const keepCover = formCover;
-    fillForm({ ...info, isbn, shelf: F("shelf").value, copies: F("copies").value, cover: keepCover.startsWith("data:") ? keepCover : (info.cover || keepCover) });
+    fillForm({ ...info, isbn, shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, backText: F("backtext").value, cover: keepCover.startsWith("data:") ? keepCover : (info.cover || keepCover) });
     setStatus(info.aiSourced ? "Claude זיהה את הספר. כדאי לעבור על הפרטים לפני השמירה." : "נמצא! עוברים על הפרטים ושומרים.", "ok");
     if (fromScan === true) $("#save-btn").focus();
   }
 
   /* Photos: shrink to a small JPEG so it fits in the shared catalogue */
-  function shrink(file, maxH = 600) {
+  function shrink(file, maxH = 600, maxW = 420, q = 0.78) {
     return new Promise((res, rej) => {
       const img = new Image(); const url = URL.createObjectURL(file);
       img.onload = () => {
-        const scale = Math.min(1, maxH / img.naturalHeight, 420 / img.naturalWidth);
+        const scale = Math.min(1, maxH / img.naturalHeight, maxW / img.naturalWidth);
         const c = document.createElement("canvas");
         c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
         c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
         URL.revokeObjectURL(url);
-        const dataUrl = c.toDataURL("image/jpeg", 0.78);
+        const dataUrl = c.toDataURL("image/jpeg", q);
         c.toBlob(blob => res({ dataUrl, blob }), "image/jpeg", 0.85);
       };
       img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("bad image")); };
@@ -1115,11 +1159,73 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
         { images: photoBlob, modelTier: "default" });
       if (!r || !r.found) { setStatus("לא הצלחנו לזהות ספר בתמונה. נסו צילום חד יותר של הכריכה או של הברקוד.", "err"); return; }
       const isbn = cleanIsbn(r.isbn);
-      fillForm({ ...r, isbn: validIsbn(isbn) ? toIsbn13(isbn) : "", shelf: F("shelf").value, cover: formCover, aiSourced: true });
+      fillForm({ ...r, isbn: validIsbn(isbn) ? toIsbn13(isbn) : "", shelf: F("shelf").value, copies: F("copies").value, backCover: formBack, backText: F("backtext").value, cover: formCover, aiSourced: true });
       setStatus("זוהה מהתמונה. כדאי לעבור על הפרטים לפני השמירה.", "ok");
     } catch (e) {
       if (e && e.code === "not_granted") { store.sample = null; updateAiUi(); setStatus("הזיהוי מתמונה לא אושר. אפשר למלא ידנית.", "err"); }
       else setStatus("הזיהוי לא הצליח הפעם. אפשר למלא ידנית.", "err");
+    } finally { btn.disabled = false; }
+  }
+
+  /* Back cover: photo -> text */
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    return new Promise((res, rej) => {
+      const el = document.createElement("script");
+      el.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+      el.onload = () => window.Tesseract ? res(window.Tesseract) : rej(new Error("tesseract"));
+      el.onerror = rej; document.head.appendChild(el);
+    });
+  }
+  function tidyOcr(t) {
+    return String(t || "")
+      .replace(/\r/g, "")
+      .split(/\n\s*\n/)                                   // paragraphs
+      .map(p => p.replace(/-\n(?=\S)/g, "").replace(/\s*\n\s*/g, " ").replace(/[ \t]{2,}/g, " ").trim())
+      .filter(p => p.length > 2 && !/^(isbn|978|979)[\d\s-]*$/i.test(p))
+      .join("\n\n");
+  }
+  function ocrCanvas(img) {
+    const sc = Math.min(1, 2200 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * sc); c.height = Math.round(img.naturalHeight * sc);
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.filter = "grayscale(1) contrast(1.25)";
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  }
+  async function readBackCover(file) {
+    const st = $("#back-status");
+    const say = (t, k) => { st.textContent = t; st.className = "status-line" + (k ? " " + k : ""); };
+    const btn = $("#back-ocr-btn"); btn.disabled = true;
+    try {
+      let text = "";
+      if (store.sample) {
+        say("Claude קורא את הכריכה האחורית…");
+        const r = await store.sample(
+          `This is a photo of a book's back cover. Transcribe the blurb text exactly as printed, in its original language (keep Hebrew in Hebrew script, right-to-left logical order). Keep paragraph breaks as blank lines. Leave out the barcode, ISBN, price, website and publisher boilerplate. Output only the text, nothing else.`,
+          { images: file, modelTier: "default" });
+        text = r.text.trim();
+      } else {
+        say("טוענים את כלי הקריאה (בפעם הראשונה זה לוקח כמה שניות)…");
+        const T = await loadTesseract();
+        const lang = /אנגלית|english/i.test(F("lang").value) ? "eng" : "heb+eng";
+        const worker = await T.createWorker(lang, 1, {
+          logger: m => { if (m.status === "recognizing text") say(`קוראים את הטקסט… ${Math.round(m.progress * 100)}%`); },
+        });
+        const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+        const { data } = await worker.recognize(ocrCanvas(img));
+        URL.revokeObjectURL(img.src);
+        await worker.terminate();
+        text = tidyOcr(data.text);
+      }
+      if (!text) { say("לא מצאנו טקסט בתמונה. מצלמים ישר, קרוב ובתאורה טובה.", "err"); return; }
+      F("backtext").value = text;
+      say("הטקסט הועתק לשדה \"הטקסט מהכריכה האחורית\". כדאי לעבור עליו ולתקן מילים שלא נקראו נכון.", "ok");
+    } catch (e) {
+      console.warn(e);
+      if (e && e.code === "not_granted") store.sample = null;
+      say("לא הצלחנו לקרוא את הטקסט. אפשר לנסות שוב או להקליד אותו.", "err");
     } finally { btn.disabled = false; }
   }
 
@@ -1137,6 +1243,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
       year: F("year").value.trim(), pages: parseInt(F("pages").value, 10) || null, language: F("lang").value.trim(),
       categories: splitList(F("cats").value), shelf: F("shelf").value.trim(), description: F("desc").value.trim(),
       cover: formCover, aiSourced: formAi,
+      backCover: formBack, backText: F("backtext").value.trim(),
       copies: Math.min(99, Math.max(1, parseInt(F("copies").value, 10) || 1)),
     };
     const btn = $("#save-btn"); btn.disabled = true;
@@ -1360,6 +1467,11 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     if (t.dataset.pick) { setMe(t.dataset.pick); $("#who-dlg").close(); return; }
     if (t.dataset.filter) { filter = t.dataset.filter; renderDrawers(); renderShelf(); return; }
     if (t.dataset.open) { openBook(t.dataset.open); return; }
+    if (t.dataset.zoom) {
+      const b = store.books.find(x => x.id === openId); if (!b) return;
+      $("#zoom-img").src = t.dataset.zoom === "back" ? b.backCover : b.cover;
+      $("#zoom-dlg").showModal(); return;
+    }
     if (t.dataset.status) { draft.note = $("#my-note").value; draft.status = t.dataset.status; renderBookCard(); return; }
     if (t.dataset.star) { draft.note = $("#my-note").value; const n = +t.dataset.star; draft.rating = draft.rating === n ? 0 : n; renderBookCard(); return; }
     const act = t.dataset.action;
@@ -1401,6 +1513,18 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     } catch { setStatus("לא הצלחנו לקרוא את התמונה. נסו קובץ JPG או PNG.", "err"); }
   });
   $("#photo-ai-btn").addEventListener("click", identifyFromPhoto);
+  F("back-photo").addEventListener("change", async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    try {
+      // Large enough to read on screen; smaller in the Claude store, whose documents are capped at 256 KB.
+      const { dataUrl } = store.db ? await shrink(file, 820, 560, 0.7) : await shrink(file, 1150, 800, 0.78);
+      formBack = dataUrl; backFile = file; setBackPreview();
+      readBackCover(file);
+    } catch { $("#back-status").textContent = "לא הצלחנו לקרוא את התמונה. נסו קובץ JPG או PNG."; }
+  });
+  $("#back-ocr-btn").addEventListener("click", () => backFile && readBackCover(backFile));
+  $("#back-clear").addEventListener("click", () => { formBack = ""; backFile = null; setBackPreview(); $("#back-status").textContent = ""; });
   $("#cover-clear").addEventListener("click", () => { formCover = ""; photoBlob = null; setCoverPreview(); updateAiUi(); });
   $("#export-btn").addEventListener("click", exportJson);
   $("#lib-join").addEventListener("click", async () => {
