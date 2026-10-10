@@ -247,7 +247,7 @@ dialog::backdrop { background: rgb(15 22 19 / .55); backdrop-filter: blur(2px); 
 .fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 var(--s-4); margin: var(--s-4) 0 0; line-height: 1.7rem; }
 .fields dt { color: var(--muted); font-size: .88rem; }
 .fields dd { margin: 0; overflow-wrap: anywhere; }
-.desc { margin-top: 1.7rem; line-height: 1.7rem; max-width: 65ch; white-space: pre-line; }
+.desc { text-align: start; margin-top: 1.7rem; line-height: 1.7rem; max-width: 65ch; white-space: pre-line; }
 .desc.clamped { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .linkish { background: none; border: 0; color: var(--primary); cursor: pointer; padding: 0; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .ratings { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); align-items: center; margin-top: var(--s-3); font-size: .92rem; }
@@ -526,7 +526,7 @@ textarea.note-in {
         <div class="fld wide"><label for="f-genres">ז׳אנר (מופרדים בפסיק)</label><input id="f-genres" placeholder="למשל: רומן היסטורי, דרמה משפחתית"></div>
         <div class="fld wide"><label for="f-cats">נושאים (מופרדים בפסיק)</label><input id="f-cats"></div>
         <div class="fld wide"><label for="f-shelf">איפה הוא עומד בבית</label><input id="f-shelf" placeholder="למשל: הסלון, מדף עליון"></div>
-        <div class="fld wide"><label for="f-desc">תקציר</label><textarea id="f-desc"></textarea></div>
+        <div class="fld wide"><label for="f-desc">תקציר</label><textarea id="f-desc" dir="auto"></textarea></div>
       </div>
       <div class="form-foot">
         <button class="btn primary" type="submit" id="save-btn">שמירה בקטלוג</button>
@@ -990,7 +990,7 @@ textarea.note-in {
         <span class="avatar">${m.he[0]}</span>
         <div>
           <div class="who"><b>${m.he}</b>${STATUS[r.status] ? `<span class="status-stamp">${STATUS[r.status].stamp}</span>` : ""}${r.rating ? starsHtml(r.rating) : ""}<span class="date">${fmtDate(r.updatedAt)}</span></div>
-          ${r.note ? `<div class="note">${esc(r.note)}</div>` : `<div class="note empty-note">עוד לא כתב/ה מילים.</div>`}
+          ${r.note ? `<div class="note" dir="auto">${esc(r.note)}</div>` : `<div class="note empty-note">עוד לא כתב/ה מילים.</div>`}
         </div>
       </div>`;
     }).join("");
@@ -1044,7 +1044,7 @@ textarea.note-in {
             </div>
             <dl class="fields">${fields.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
             ${(b.genres || []).length ? `<div class="tags">${b.genres.map(c => `<button type="button" class="tag genre" data-genre="${esc(c)}" title="כל הספרים בז׳אנר הזה">${esc(c)}</button>`).join("")}</div>` : ""}
-            ${desc ? `<div class="desc ${long && !descOpen ? "clamped" : ""}">${esc(desc)}</div>${long ? `<button class="linkish" type="button" data-action="toggle-desc">${descOpen ? "פחות" : "להמשך התקציר"}</button>` : ""}` : ""}
+            ${desc ? `<div class="desc ${long && !descOpen ? "clamped" : ""}" dir="auto">${esc(desc)}</div>${long ? `<button class="linkish" type="button" data-action="toggle-desc">${descOpen ? "פחות" : "להמשך התקציר"}</button>` : ""}` : ""}
             ${b.aiSourced ? `<p class="status-line" style="margin-top:.6rem">הפרטים זוהו על ידי Claude. כדאי לוודא מול הספר.</p>` : ""}
             <div class="card-actions">
               ${(b.authors || [])[0] ? `<button class="btn" type="button" data-action="author-books">ספרים נוספים של ${esc(b.authors[0])}</button>` : ""}
