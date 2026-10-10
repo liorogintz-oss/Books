@@ -426,6 +426,7 @@ textarea.note-in {
 
   <footer class="footnote">
     <span id="mode-note"></span>
+    <button class="linkish" id="gb-fill" type="button" hidden></button>
     <span class="row" id="fb-tools" hidden>
       <button class="linkish" id="invite-btn" type="button">העתקת קישור הזמנה למשפחה</button>
     </span>
@@ -860,7 +861,34 @@ textarea.note-in {
     if (store.mode === "shared") { note.textContent = "הקטלוג משותף: כל מי שפותח את הדף רואה את אותם ספרים ואת אותן חוות דעת."; $("#local-tools").hidden = true; }
     else if (store.mode === "local") { note.textContent = "הקטלוג נשמר בדפדפן הזה. כדאי לגבות אותו לקובץ מדי פעם."; $("#local-tools").hidden = false; }
   }
+  const needsGb = b => b.isbn && !b.gbChecked && !b.gbRating;
+  function renderGbButton() {
+    const n = store.books.filter(needsGb).length, btn = $("#gb-fill");
+    btn.hidden = !n || (store.mode === "firebase" && !store.lib);
+    if (!btn.disabled) btn.textContent = `השלמת דירוגי Google Books (${n} ספרים)`;
+  }
+  async function fillGoogleRatings() {
+    const btn = $("#gb-fill"); if (btn.disabled) return;
+    const todo = store.books.filter(needsGb);
+    btn.disabled = true;
+    let found = 0, done = 0, failed = 0;
+    for (const b of todo) {
+      btn.textContent = `בודקים דירוגים ב־Google Books… ${done + 1}/${todo.length}`;
+      try {
+        const info = await fromGoogle(b.isbn);
+        const patch = { gbChecked: Date.now() };
+        if (info && info.gbRating) { patch.gbRating = info.gbRating; found++; }
+        await store.update(b.id, patch);
+      } catch (e) { console.warn(e); failed++; }
+      done++;
+      await new Promise(r => setTimeout(r, 250));
+    }
+    btn.disabled = false; renderGbButton();
+    toast(failed === todo.length ? "לא הצלחנו להתחבר ל־Google Books. נסו שוב מאוחר יותר."
+      : `נבדקו ${done - failed} ספרים. ל־${found} מהם נמצא דירוג ב־Google Books.`);
+  }
   function render() {
+    renderGbButton();
     renderReaders(); renderDrawers(); renderShelf(); renderCounters(); renderMode();
     if (openId && $("#book-dlg").open) renderBookCard();
   }
@@ -1565,6 +1593,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
   $("#back-clear").addEventListener("click", () => { formBack = ""; backFile = null; setBackPreview(); $("#back-status").textContent = ""; });
   $("#cover-clear").addEventListener("click", () => { formCover = ""; photoBlob = null; setCoverPreview(); updateAiUi(); });
   $("#export-btn").addEventListener("click", exportJson);
+  $("#gb-fill").addEventListener("click", fillGoogleRatings);
   $("#lib-join").addEventListener("click", async () => {
     const k = parseKey($("#lib-code").value);
     if (!k) { $("#lib-msg").textContent = "זה לא נראה כמו קוד ספרייה. הדביקו את כל קישור ההזמנה."; return; }
