@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>ספריית הבית</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Assistant:wght@400;500;600;700&family=Amatic+SC:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a wooden card-catalog — brass-labelled drawers as filters, a shelf of covers, and each book opens as a ruled library index card with a readers' slip. */
+:root {
+  --bg: #e6e9e2;          /* archival grey-green */
+  --bg-2: #dde2d9;
+  --ink: #1c2822;
+  --muted: #5a6860;
+  --line: #c3cbc1;
+  --card: #fcfcf8;        /* index card stock */
+  --rule-blue: #b7c9de;
+  --rule-red: #cf5a4f;
+  --oak: #6e4326;
+  --oak-2: #8a5733;
+  --brass: #b4903f;
+  --brass-hi: #e0c27a;
+  --primary: #1f5a45;     /* bottle green */
+  --primary-ink: #f2f6f1;
+  --focus: #2f7ec1;
+  --shadow: 0 1px 2px rgb(28 40 34 / .08), 0 6px 18px rgb(28 40 34 / .10);
+  --r-ravid: #2f5fa8;
+  --r-adi: #b23a48;
+  --r-keren: #2f7a4f;
+  --r-lior: #7046a3;
+  --star: #c48a12;
+
+  --f-display: "Frank Ruhl Libre", "David Libre", "Times New Roman", serif;
+  --f-body: "Assistant", "Segoe UI", Arial, sans-serif;
+  --f-hand: "Amatic SC", "Comic Sans MS", cursive;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --s-1: .25rem; --s-2: .5rem; --s-3: .75rem; --s-4: 1rem; --s-5: 1.5rem; --s-6: 2rem; --s-7: 3rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121816; --bg-2: #18201d; --ink: #e3e9e3; --muted: #9aa8a0; --line: #2d3833;
+    --card: #1d2622; --rule-blue: #2c3e52; --rule-red: #c0645a;
+    --oak: #4a2e1b; --oak-2: #5f3b23; --brass: #c7a456; --brass-hi: #e8cf8e;
+    --primary: #4fa483; --primary-ink: #0d1411; --focus: #6fb2ec;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 22px rgb(0 0 0 / .35);
+    --r-ravid: #7aa6ec; --r-adi: #ec7f8c; --r-keren: #72c495; --r-lior: #b496e6; --star: #e5b13e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121816; --bg-2: #18201d; --ink: #e3e9e3; --muted: #9aa8a0; --line: #2d3833;
+  --card: #1d2622; --rule-blue: #2c3e52; --rule-red: #c0645a;
+  --oak: #4a2e1b; --oak-2: #5f3b23; --brass: #c7a456; --brass-hi: #e8cf8e;
+  --primary: #4fa483; --primary-ink: #0d1411; --focus: #6fb2ec;
+  --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 22px rgb(0 0 0 / .35);
+  --r-ravid: #7aa6ec; --r-adi: #ec7f8c; --r-keren: #72c495; --r-lior: #b496e6; --star: #e5b13e;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.55; }
+#app { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 0 var(--s-7); }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+
+/* ---------- Header: the catalog cabinet ---------- */
+.cabinet {
+  margin-top: var(--s-4);
+  background:
+    repeating-linear-gradient(92deg, rgb(255 255 255 / .035) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, var(--oak-2), var(--oak));
+  color: #f6eee2;
+  border-radius: 6px;
+  padding: var(--s-5) var(--s-5) var(--s-4);
+  box-shadow: var(--shadow);
+  display: grid; gap: var(--s-4);
+}
+.cabinet-top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--s-4); }
+.brand { display: grid; gap: var(--s-1); min-width: 0; }
+.brand .eyebrow { font-size: .8rem; letter-spacing: .12em; opacity: .8; }
+.brand h1 { font-size: clamp(2.1rem, 6vw, 3.4rem); font-weight: 900; letter-spacing: -.01em; }
+.brand p { margin: 0; opacity: .85; max-width: 48ch; }
+.counters { display: flex; gap: var(--s-3); }
+@media (max-width: 480px) { .counters { width: 100%; } .plate { min-width: 0; padding-inline: var(--s-2); } }
+.plate {
+  background: linear-gradient(180deg, var(--brass-hi), var(--brass));
+  color: #2b2110; border-radius: 3px; padding: var(--s-2) var(--s-3);
+  min-width: 6.5rem; flex: 1 1 0; text-align: center;
+  box-shadow: inset 0 -2px 0 rgb(0 0 0 / .18), 0 1px 0 rgb(255 255 255 / .2);
+}
+.plate b { display: block; font-family: var(--f-mono); font-size: 1.35rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.plate span { font-size: .78rem; letter-spacing: .06em; }
+
+.readers { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+.readers-label { font-size: .85rem; opacity: .85; margin-inline-end: var(--s-1); }
+.reader-btn {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  border: 1px solid rgb(255 255 255 / .25); background: rgb(0 0 0 / .18); color: #f6eee2;
+  padding: .3rem .8rem .3rem .45rem; border-radius: 999px; cursor: pointer; transition: background .15s;
+}
+.reader-btn:hover { background: rgb(0 0 0 / .3); }
+.reader-btn[aria-pressed="true"] { background: #f6eee2; color: #2a1c10; border-color: #f6eee2; }
+.avatar {
+  inline-size: 1.7rem; block-size: 1.7rem; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--f-display); font-weight: 700; font-size: .95rem; color: #fff; background: var(--c);
+  flex: none;
+}
+
+/* ---------- Toolbar: drawers ---------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; margin-block: var(--s-5) var(--s-4); }
+.search { flex: 1 1 240px; min-width: 0; position: relative; }
+.search input {
+  width: 100%; padding: .65rem .9rem .65rem 2.4rem; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--card);
+}
+.search svg { position: absolute; left: .75rem; top: 50%; translate: 0 -50%; color: var(--muted); }
+select.sort { padding: .62rem .7rem; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+.btn {
+  display: inline-flex; align-items: center; gap: var(--s-2); justify-content: center;
+  border: 1px solid var(--line); background: var(--card); padding: .6rem 1rem; border-radius: 6px; cursor: pointer;
+  font-weight: 600;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--primary); color: var(--primary-ink); border-color: transparent; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--rule-red); }
+.btn[disabled] { opacity: .55; cursor: progress; }
+
+.drawers { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-5); }
+.drawer {
+  border: 1px solid var(--line); background: var(--bg-2); border-radius: 4px; padding: .35rem .75rem;
+  cursor: pointer; font-size: .92rem; display: inline-flex; gap: var(--s-2); align-items: center;
+}
+.drawer .n { font-family: var(--f-mono); font-size: .8rem; color: var(--muted); }
+.drawer[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.drawer[aria-pressed="true"] .n { color: var(--bg); opacity: .75; }
+
+/* ---------- Shelf ---------- */
+.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s-6) var(--s-5); }
+@media (max-width: 480px) { .shelf { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5) var(--s-4); } }
+.book { display: grid; gap: var(--s-2); align-content: start; cursor: pointer; background: none; border: 0; padding: 0; text-align: start; min-width: 0; }
+.book:hover .cover { transform: translateY(-4px) rotate(-.6deg); box-shadow: 0 14px 26px rgb(0 0 0 / .22); }
+.cover {
+  aspect-ratio: 2 / 3; width: 100%; max-width: 100%; border-radius: 2px 5px 5px 2px; overflow: hidden; position: relative;
+  box-shadow: 0 2px 4px rgb(0 0 0 / .15), 0 8px 18px rgb(0 0 0 / .14);
+  transition: transform .2s ease, box-shadow .2s ease; background: var(--bg-2);
+}
+.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover::after { /* spine crease */
+  content: ""; position: absolute; inset-block: 0; inset-inline-end: 6px; width: 2px;
+  background: linear-gradient(90deg, rgb(0 0 0 / .18), rgb(255 255 255 / .12)); pointer-events: none;
+}
+.cloth {
+  position: absolute; inset: 0; display: grid; align-content: space-between; padding: 12% 12% 10%;
+  color: #f4e9cf; background: var(--cloth);
+  background-image: repeating-linear-gradient(45deg, rgb(255 255 255 / .03) 0 1px, transparent 1px 4px),
+                    repeating-linear-gradient(-45deg, rgb(0 0 0 / .05) 0 1px, transparent 1px 4px);
+}
+.cloth .frame { border: 1px solid rgb(244 233 207 / .55); outline: 1px solid rgb(244 233 207 / .3); outline-offset: 3px; padding: 10% 8%; text-align: center; display: grid; gap: .4em; }
+.cloth .t { font-family: var(--f-display); font-weight: 700; font-size: clamp(.95rem, 2.4vw, 1.15rem); line-height: 1.15; overflow-wrap: anywhere; }
+.cloth .a { font-size: .75rem; opacity: .85; }
+.cloth .orn { text-align: center; font-family: var(--f-display); opacity: .6; letter-spacing: .3em; }
+.book-meta { min-width: 0; display: grid; gap: 2px; }
+.book-title { font-family: var(--f-display); font-weight: 700; font-size: 1.02rem; line-height: 1.25; overflow-wrap: anywhere; }
+.book-author { color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
+.stamps { display: flex; gap: 4px; align-items: center; margin-top: 4px; flex-wrap: wrap; min-height: 1.3rem; }
+.dot {
+  inline-size: 1.25rem; block-size: 1.25rem; border-radius: 50%; display: grid; place-items: center;
+  font-size: .68rem; font-weight: 700; font-family: var(--f-display);
+  border: 1.5px solid var(--c); color: var(--c); background: transparent;
+}
+.dot.done { background: var(--c); color: #fff; }
+.dot.reading { background: linear-gradient(90deg, transparent 50%, var(--c) 50%); color: var(--ink); }
+.avg { font-family: var(--f-mono); font-size: .78rem; color: var(--star); margin-inline-start: auto; }
+
+/* Empty / loading */
+.empty {
+  display: grid; justify-items: center; text-align: center; gap: var(--s-3); padding: var(--s-7) var(--s-4);
+  border: 2px dashed var(--line); border-radius: 8px; background: var(--bg-2);
+}
+.empty h2 { font-size: 1.6rem; }
+.empty p { margin: 0; color: var(--muted); max-width: 46ch; }
+.empty .slot { inline-size: 7rem; block-size: 2.2rem; border-radius: 3px; background: linear-gradient(180deg, var(--brass-hi), var(--brass)); display: grid; place-items: center; color: #2b2110; font-size: .8rem; letter-spacing: .1em; }
+
+/* ---------- Dialogs ---------- */
+dialog {
+  border: 0; padding: 0; background: transparent; color: var(--ink);
+  width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: visible;
+}
+dialog::backdrop { background: rgb(15 22 19 / .55); backdrop-filter: blur(2px); }
+.sheet { background: var(--card); border-radius: 6px; box-shadow: 0 20px 60px rgb(0 0 0 / .35); max-height: calc(100dvh - 24px); overflow: auto; }
+.close {
+  position: sticky; top: 0; float: left; margin: var(--s-2); z-index: 2;
+  inline-size: 2.2rem; block-size: 2.2rem; border-radius: 50%; border: 1px solid var(--line); background: var(--card); cursor: pointer; font-size: 1.2rem; line-height: 1;
+}
+
+/* The index card */
+.index-card {
+  position: relative; padding: var(--s-5) var(--s-5) var(--s-5);
+  background-image:
+    linear-gradient(var(--card), var(--card)),
+    repeating-linear-gradient(180deg, transparent 0 calc(1.7rem - 1px), var(--rule-blue) calc(1.7rem - 1px) 1.7rem);
+  background-size: 100% 4.4rem, 100% 100%;
+  background-repeat: no-repeat, repeat;
+  background-position: top, 0 4.4rem;
+}
+.index-card::before { /* red header rule */
+  content: ""; position: absolute; inset-inline: 0; top: 4.4rem; height: 2px; background: var(--rule-red); opacity: .85;
+}
+.index-card::after { /* punch hole */
+  content: ""; position: absolute; bottom: .7rem; left: 50%; translate: -50% 0; inline-size: .9rem; block-size: .9rem; border-radius: 50%;
+  background: var(--bg); box-shadow: inset 0 1px 2px rgb(0 0 0 / .3);
+}
+.callno { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-3); height: 2.5rem; flex-wrap: wrap; padding-inline-end: 2.6rem; }
+.callno .mono { font-size: .82rem; color: var(--muted); }
+.card-body { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: var(--s-5); margin-top: var(--s-5); }
+@media (max-width: 600px) { .card-body { grid-template-columns: 1fr; } .card-body .cover { max-width: 170px; } }
+.card-body h2 { font-size: clamp(1.5rem, 4vw, 2.1rem); font-weight: 900; }
+.card-body .sub { color: var(--muted); font-family: var(--f-display); font-size: 1.1rem; margin-top: var(--s-1); }
+.fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 var(--s-4); margin: var(--s-4) 0 0; line-height: 1.7rem; }
+.fields dt { color: var(--muted); font-size: .88rem; }
+.fields dd { margin: 0; overflow-wrap: anywhere; }
+.desc { margin-top: 1.7rem; line-height: 1.7rem; max-width: 65ch; white-space: pre-line; }
+.desc.clamped { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.linkish { background: none; border: 0; color: var(--primary); cursor: pointer; padding: 0; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.tags { display: flex; gap: var(--s-1); flex-wrap: wrap; margin-top: var(--s-3); }
+.tag { font-size: .78rem; padding: 0 .5rem; border-radius: 3px; background: var(--bg-2); border: 1px solid var(--line); line-height: 1.5rem; }
+.card-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-5); }
+
+/* Readers' slip — like a library due-date card */
+.slip { background: var(--bg-2); padding: var(--s-5); border-top: 1px dashed var(--line); }
+.slip-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-4); }
+.slip-head h3 { font-size: 1.35rem; }
+.slip-head small { color: var(--muted); }
+.entries { display: grid; gap: var(--s-3); }
+.entry {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-3); align-items: start;
+  background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: var(--s-3) var(--s-4);
+}
+.entry.mine { border-color: var(--c); box-shadow: inset 3px 0 0 var(--c); }
+.entry .who { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; }
+.entry .who b { font-family: var(--f-display); font-size: 1.05rem; }
+.status-stamp {
+  font-size: .72rem; font-weight: 700; letter-spacing: .08em; padding: .05rem .45rem; border: 1.5px solid var(--c); color: var(--c);
+  border-radius: 3px; transform: rotate(-2deg); display: inline-block;
+}
+.entry .date { font-family: var(--f-mono); font-size: .75rem; color: var(--muted); }
+.entry .note { font-family: var(--f-hand); font-size: 1.6rem; font-weight: 700; line-height: 1.15; margin-top: var(--s-1); white-space: pre-line; overflow-wrap: anywhere; }
+.entry .note.empty-note { font-family: var(--f-body); font-size: .9rem; font-weight: 400; color: var(--muted); }
+.stars { color: var(--star); letter-spacing: 2px; font-size: 1rem; }
+.stars .off { color: var(--line); }
+
+.my-form { display: grid; gap: var(--s-3); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex-wrap: wrap; }
+.seg button { border: 0; background: var(--card); padding: .45rem .8rem; cursor: pointer; }
+.seg button + button { border-inline-start: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--c); color: #fff; }
+.star-input { display: inline-flex; direction: ltr; gap: 2px; }
+.star-input button { background: none; border: 0; font-size: 1.7rem; line-height: 1; cursor: pointer; color: var(--line); padding: 0 2px; }
+.star-input button.on { color: var(--star); }
+textarea.note-in {
+  width: 100%; min-height: 6.5rem; resize: vertical; border: 1px solid var(--line); border-radius: 4px; padding: .6rem .8rem;
+  background: var(--card); font-family: var(--f-hand); font-size: 1.6rem; font-weight: 700; line-height: 1.2;
+}
+.row { display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap; }
+
+/* Add-book form */
+.form { padding: var(--s-5); display: grid; gap: var(--s-4); }
+.form h2 { font-size: 1.7rem; padding-inline-end: 2.6rem; }
+.isbn-box {
+  display: grid; gap: var(--s-2); padding: var(--s-4); border-radius: 6px;
+  background: linear-gradient(180deg, var(--oak-2), var(--oak)); color: #f6eee2;
+}
+.isbn-box label { font-size: .9rem; }
+.isbn-row { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.isbn-row input {
+  flex: 1 1 200px; min-width: 0; font-family: var(--f-mono); font-size: 1.25rem; letter-spacing: .06em; direction: ltr; text-align: left;
+  padding: .55rem .8rem; border-radius: 4px; border: 0; background: var(--card); color: var(--ink);
+}
+.isbn-hint { font-size: .82rem; opacity: .85; margin: 0; }
+.status-line { font-size: .9rem; min-height: 1.4em; margin: 0; }
+.status-line.err { color: var(--rule-red); }
+.status-line.ok { color: var(--primary); }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3) var(--s-4); }
+@media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
+.fld { display: grid; gap: 4px; min-width: 0; }
+.fld.wide { grid-column: 1 / -1; }
+.fld label { font-size: .85rem; color: var(--muted); }
+.fld input, .fld textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: .5rem .7rem; background: var(--card);
+}
+.fld textarea { min-height: 6rem; resize: vertical; }
+.cover-pick { display: flex; gap: var(--s-4); align-items: center; flex-wrap: wrap; }
+.cover-pick .cover { width: 96px; flex: none; }
+.cover-pick .btns { display: grid; gap: var(--s-2); }
+.form-foot { display: flex; gap: var(--s-2); justify-content: flex-start; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: var(--s-4); }
+
+/* Who-are-you */
+.who-sheet { padding: var(--s-6) var(--s-5); text-align: center; display: grid; gap: var(--s-5); }
+.who-sheet h2 { font-size: 2rem; }
+.who-sheet p { margin: 0; color: var(--muted); }
+.who-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
+@media (max-width: 520px) { .who-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.who-card {
+  display: grid; justify-items: center; gap: var(--s-2); padding: var(--s-4) var(--s-2); border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--bg-2);
+}
+.who-card:hover { border-color: var(--c); }
+.who-card .avatar { inline-size: 3.4rem; block-size: 3.4rem; font-size: 1.6rem; }
+.who-card b { font-family: var(--f-display); font-size: 1.2rem; }
+
+.confirm { padding: var(--s-5); display: grid; gap: var(--s-4); }
+.confirm h2 { font-size: 1.4rem; }
+
+.toast {
+  position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; translate: -50% 0;
+  background: var(--ink); color: var(--bg); padding: .6rem 1rem; border-radius: 6px; box-shadow: var(--shadow); z-index: 50;
+  max-width: calc(100vw - 32px); font-size: .95rem;
+}
+.footnote { margin-top: var(--s-7); color: var(--muted); font-size: .85rem; display: flex; gap: var(--s-3); flex-wrap: wrap; justify-content: space-between; border-top: 1px solid var(--line); padding-top: var(--s-4); }
+.footnote .row { gap: var(--s-2); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div id="app" dir="rtl" lang="he">
+  <header class="cabinet">
+    <div class="cabinet-top">
+      <div class="brand">
+        <span class="eyebrow">קטלוג משפחתי · מגירה א׳</span>
+        <h1>ספריית הבית</h1>
+        <p>כל הספרים שעל המדפים שלנו, ומה כל אחד מאיתנו חשב עליהם.</p>
+      </div>
+      <div class="counters" aria-label="סיכום">
+        <div class="plate"><b id="cnt-books">0</b><span>ספרים</span></div>
+        <div class="plate"><b id="cnt-reviews">0</b><span>חוות דעת</span></div>
+        <div class="plate"><b id="cnt-reading">0</b><span>בקריאה עכשיו</span></div>
+      </div>
+    </div>
+    <div class="readers" role="group" aria-label="מי קורא עכשיו">
+      <span class="readers-label" id="readers-label">אני:</span>
+      <div id="reader-btns" class="readers"></div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="search">
+      <input id="q" type="search" placeholder="חיפוש לפי שם, מחבר או ISBN" aria-label="חיפוש">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+    </div>
+    <select id="sort" class="sort" aria-label="מיון">
+      <option value="added">נוספו לאחרונה</option>
+      <option value="title">לפי שם</option>
+      <option value="author">לפי מחבר</option>
+      <option value="rating">לפי דירוג</option>
+    </select>
+    <button id="add-btn" class="btn primary" type="button">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      הוספת ספר
+    </button>
+  </div>
+
+  <nav id="drawers" class="drawers" aria-label="סינון"></nav>
+
+  <main id="shelf-wrap">
+    <div class="empty" id="loading">
+      <div class="slot">טוען</div>
+      <p>פותחים את מגירות הקטלוג…</p>
+    </div>
+  </main>
+
+  <footer class="footnote">
+    <span id="mode-note"></span>
+    <span class="row" id="local-tools" hidden>
+      <button class="linkish" id="export-btn" type="button">גיבוי לקובץ</button>
+      <label class="linkish" for="import-file">שחזור מגיבוי</label>
+      <input id="import-file" type="file" accept="application/json" hidden>
+    </span>
+  </footer>
+</div>
+
+<!-- Book card -->
+<dialog id="book-dlg" dir="rtl" lang="he" aria-label="כרטיס ספר"><div class="sheet" id="book-sheet"></div></dialog>
+
+<!-- Add / edit -->
+<dialog id="form-dlg" dir="rtl" lang="he" aria-label="הוספת ספר">
+  <div class="sheet">
+    <button class="close" type="button" data-close aria-label="סגירה">×</button>
+    <form id="book-form" class="form" novalidate>
+      <h2 id="form-title">ספר חדש בקטלוג</h2>
+      <div class="isbn-box" id="isbn-box">
+        <label for="f-isbn">מספר ISBN (מגב הספר, מעל הברקוד)</label>
+        <div class="isbn-row">
+          <input id="f-isbn" inputmode="numeric" autocomplete="off" placeholder="978-965-…">
+          <button class="btn primary" type="button" id="lookup-btn">איתור פרטים</button>
+        </div>
+        <p class="isbn-hint" id="isbn-hint">מקלידים את המספר, והשם, המחבר, ההוצאה והכריכה יתמלאו לבד.</p>
+      </div>
+      <p class="status-line" id="lookup-status" role="status" aria-live="polite"></p>
+
+      <div class="cover-pick">
+        <div class="cover" id="f-cover-prev"></div>
+        <div class="btns">
+          <label class="btn" for="f-photo">צילום או העלאת כריכה</label>
+          <input id="f-photo" type="file" accept="image/*" capture="environment" hidden>
+          <button class="btn ghost" type="button" id="photo-ai-btn" hidden>זיהוי הספר מהתמונה</button>
+          <button class="linkish" type="button" id="cover-clear" hidden>הסרת תמונה</button>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="fld wide"><label for="f-title">שם הספר *</label><input id="f-title" required></div>
+        <div class="fld wide"><label for="f-subtitle">כותרת משנה</label><input id="f-subtitle"></div>
+        <div class="fld"><label for="f-authors">מחבר/ים (מופרדים בפסיק)</label><input id="f-authors"></div>
+        <div class="fld"><label for="f-translator">תרגום</label><input id="f-translator"></div>
+        <div class="fld"><label for="f-publisher">הוצאה</label><input id="f-publisher"></div>
+        <div class="fld"><label for="f-year">שנה</label><input id="f-year" inputmode="numeric"></div>
+        <div class="fld"><label for="f-pages">עמודים</label><input id="f-pages" inputmode="numeric"></div>
+        <div class="fld"><label for="f-lang">שפה</label><input id="f-lang"></div>
+        <div class="fld wide"><label for="f-cats">נושאים / ז׳אנר (מופרדים בפסיק)</label><input id="f-cats"></div>
+        <div class="fld wide"><label for="f-shelf">איפה הוא עומד בבית</label><input id="f-shelf" placeholder="למשל: הסלון, מדף עליון"></div>
+        <div class="fld wide"><label for="f-desc">תקציר</label><textarea id="f-desc"></textarea></div>
+      </div>
+      <div class="form-foot">
+        <button class="btn primary" type="submit" id="save-btn">שמירה בקטלוג</button>
+        <button class="btn ghost" type="button" data-close>ביטול</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- Who are you -->
+<dialog id="who-dlg" dir="rtl" lang="he" aria-label="מי קורא">
+  <div class="sheet who-sheet">
+    <div>
+      <h2>מי בא לספרייה?</h2>
+      <p>בוחרים שם, וכל חוות דעת שתכתבו תירשם על שמכם. אפשר להחליף בכל רגע מלמעלה.</p>
+    </div>
+    <div class="who-grid" id="who-grid"></div>
+  </div>
+</dialog>
+
+<!-- Confirm -->
+<dialog id="confirm-dlg" dir="rtl" lang="he" aria-label="אישור">
+  <div class="sheet confirm">
+    <h2 id="confirm-text"></h2>
+    <div class="row">
+      <button class="btn primary" type="button" id="confirm-yes" style="background: var(--rule-red)">כן, למחוק</button>
+      <button class="btn ghost" type="button" id="confirm-no">ביטול</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ---------------- Family ---------------- */
+  const MEMBERS = [
+    { id: "Ravid", he: "רביד", color: "var(--r-ravid)" },
+    { id: "Adi",   he: "עדי",  color: "var(--r-adi)" },
+    { id: "Keren", he: "קרן",  color: "var(--r-keren)" },
+    { id: "Lior",  he: "ליאור", color: "var(--r-lior)" },
+  ];
+  const M = Object.fromEntries(MEMBERS.map(m => [m.id, m]));
+  const STATUS = {
+    want:    { he: "רוצה לקרוא", stamp: "ברשימה" },
+    reading: { he: "באמצע",      stamp: "בקריאה" },
+    done:    { he: "סיימתי",     stamp: "נקרא" },
+  };
+  const CLOTHS = ["#6b2430", "#1f3b5c", "#2c5240", "#7a5a1e", "#4b3a63", "#38474f", "#7b3b20", "#24504f"];
+
+  /* ---------------- Helpers ---------------- */
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const ls = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } },
+  };
+  const hash = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.codePointAt(0)) | 0; return Math.abs(h); };
+  const fmtDate = ts => ts ? new Date(ts).toLocaleDateString("he-IL", { day: "numeric", month: "short", year: "numeric" }) : "";
+  const splitList = s => String(s || "").split(/[,،;]/).map(x => x.trim()).filter(Boolean);
+  const newId = () => "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  let toastTimer;
+  function toast(msg) {
+    const t = $("#toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3200);
+  }
+
+  /* ISBN */
+  const cleanIsbn = s => String(s || "").toUpperCase().replace(/[^0-9X]/g, "");
+  function validIsbn(s) {
+    if (/^\d{9}[\dX]$/.test(s)) {
+      let sum = 0; for (let i = 0; i < 10; i++) sum += (s[i] === "X" ? 10 : +s[i]) * (10 - i);
+      return sum % 11 === 0;
+    }
+    if (/^\d{13}$/.test(s)) {
+      let sum = 0; for (let i = 0; i < 13; i++) sum += +s[i] * (i % 2 ? 3 : 1);
+      return sum % 10 === 0;
+    }
+    return false;
+  }
+  function toIsbn13(s) {
+    if (s.length === 13) return s;
+    const core = "978" + s.slice(0, 9);
+    let sum = 0; for (let i = 0; i < 12; i++) sum += +core[i] * (i % 2 ? 3 : 1);
+    return core + ((10 - (sum % 10)) % 10);
+  }
+  function prettyIsbn(s) {
+    if (!s) return "";
+    if (s.length === 13) return `${s.slice(0, 3)}-${s.slice(3, 6)}-${s.slice(6, 9)}-${s.slice(9, 12)}-${s.slice(12)}`;
+    return s;
+  }
+
+  /* ---------------- Store: Claude db (shared) or this browser ---------------- */
+  const store = {
+    mode: "loading", books: [], db: null, sample: null,
+    async init() {
+      const api = window.claude && typeof window.claude.use === "function" ? window.claude : null;
+      if (api) {
+        api.use("sample").then(s => { store.sample = s; updateAiUi(); }).catch(() => {});
+        let db = null;
+        try { db = await api.use("db"); } catch { db = null; }
+        if (db) {
+          store.db = db; store.mode = "shared";
+          db.collection("books").onSnapshot(
+            snap => { store.books = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); },
+            err => { console.warn(err); if (err && err.code === "revoked") toast("הגישה לנתונים הסתיימה. רעננו את הדף."); }
+          );
+          render();
+          return;
+        }
+      }
+      store.mode = "local";
+      store.books = ls.get("homeLibrary.books", []);
+      render();
+    },
+    persistLocal() { if (!ls.set("homeLibrary.books", store.books)) toast("הדפדפן מלא. כדאי לגבות לקובץ ולהקטין תמונות."); render(); },
+    async add(book) {
+      if (store.db) return store.db.collection("books").doc(book.id).set(book);
+      store.books.push(book); store.persistLocal();
+    },
+    async update(id, patch) {
+      if (store.db) return store.db.doc("books/" + id).update(patch);
+      const b = store.books.find(x => x.id === id); if (!b) return;
+      for (const [k, v] of Object.entries(patch)) {
+        if (v && typeof v === "object" && !Array.isArray(v) && b[k] && typeof b[k] === "object") b[k] = { ...b[k], ...v };
+        else b[k] = v;
+      }
+      store.persistLocal();
+    },
+    async remove(id) {
+      if (store.db) return store.db.doc("books/" + id).delete();
+      store.books = store.books.filter(x => x.id !== id); store.persistLocal();
+    },
+  };
+  function dbErr(e) {
+    const code = e && e.code;
+    if (code === "invalid_argument") return "אין לכם הרשאת כתיבה בספרייה הזו. בקשו מבעלי הספרייה לשתף אתכם כ־Contributor.";
+    if (code === "quota_exceeded") return "המקום בקטלוג נגמר. נסו להסיר תמונות גדולות או ספרים ישנים.";
+    return "השמירה לא הצליחה. בדקו את החיבור ונסו שוב.";
+  }
+
+  /* ---------------- State ---------------- */
+  let me = ls.get("homeLibrary.me", null);
+  if (!M[me]) me = null;
+  let filter = "all";
+  let openId = null;
+
+  /* ---------------- Book helpers ---------------- */
+  const reviewsOf = b => Object.entries(b.reviews || {}).filter(([k, v]) => M[k] && v);
+  function avgRating(b) {
+    const r = reviewsOf(b).map(([, v]) => v.rating).filter(n => n > 0);
+    return r.length ? r.reduce((a, c) => a + c, 0) / r.length : 0;
+  }
+  function coverHtml(b) {
+    const cloth = CLOTHS[hash(b.title || b.isbn || b.id) % CLOTHS.length];
+    const fallback = `<div class="cloth" style="--cloth:${cloth}"><span class="orn">✦ ✦ ✦</span><div class="frame"><span class="t">${esc(b.title || "ללא שם")}</span><span class="a">${esc((b.authors || []).join(", "))}</span></div><span class="orn">❧</span></div>`;
+    if (!b.cover) return fallback;
+    return fallback + `<img src="${esc(b.cover)}" alt="" loading="lazy">`;
+  }
+  const starsHtml = n => {
+    let s = ""; for (let i = 1; i <= 5; i++) s += i <= n ? "★" : `<span class="off">★</span>`;
+    return `<span class="stars" aria-label="${n} מתוך 5 כוכבים">${s}</span>`;
+  };
+
+  /* ---------------- Render ---------------- */
+  function renderReaders() {
+    $("#readers-label").textContent = me ? "אני:" : "מי אתם? בחרו שם כדי לכתוב חוות דעת:";
+    $("#reader-btns").innerHTML = MEMBERS.map(m =>
+      `<button class="reader-btn" type="button" data-me="${m.id}" aria-pressed="${me === m.id}" style="--c:${m.color}"><span class="avatar">${m.he[0]}</span>${m.he}</button>`
+    ).join("");
+  }
+  function renderDrawers() {
+    const books = store.books;
+    const count = fn => books.filter(fn).length;
+    const mine = st => b => b.reviews && b.reviews[me] && b.reviews[me].status === st;
+    const items = [
+      ["all", "כל הספרים", books.length],
+      ["unread", "עוד לא נקראו", count(b => !reviewsOf(b).some(([, v]) => v.status === "done"))],
+    ];
+    if (me) items.push(
+      ["want", `${M[me].he}: רוצה לקרוא`, count(mine("want"))],
+      ["reading", `${M[me].he}: באמצע`, count(mine("reading"))],
+      ["done", `${M[me].he}: סיימתי`, count(mine("done"))],
+    );
+    if (!items.some(i => i[0] === filter)) filter = "all";
+    $("#drawers").innerHTML = items.map(([k, label, n]) =>
+      `<button class="drawer" type="button" data-filter="${k}" aria-pressed="${filter === k}">${esc(label)}<span class="n">${n}</span></button>`
+    ).join("");
+  }
+  function visibleBooks() {
+    const q = $("#q").value.trim().toLowerCase();
+    const qIsbn = cleanIsbn(q);
+    let list = store.books.filter(b => {
+      if (filter === "unread" && reviewsOf(b).some(([, v]) => v.status === "done")) return false;
+      if (["want", "reading", "done"].includes(filter) && !(b.reviews && b.reviews[me] && b.reviews[me].status === filter)) return false;
+      if (!q) return true;
+      const hay = [b.title, b.subtitle, ...(b.authors || []), b.publisher, ...(b.categories || [])].join(" ").toLowerCase();
+      return hay.includes(q) || (qIsbn.length >= 4 && (b.isbn || "").includes(qIsbn));
+    });
+    const sort = $("#sort").value;
+    const coll = new Intl.Collator("he");
+    list.sort((a, b) =>
+      sort === "title" ? coll.compare(a.title || "", b.title || "") :
+      sort === "author" ? coll.compare((a.authors || [])[0] || "", (b.authors || [])[0] || "") :
+      sort === "rating" ? avgRating(b) - avgRating(a) :
+      (b.addedAt || 0) - (a.addedAt || 0));
+    return list;
+  }
+  function renderShelf() {
+    const wrap = $("#shelf-wrap");
+    if (store.mode === "loading") return;
+    if (!store.books.length) {
+      wrap.innerHTML = `<div class="empty">
+        <div class="slot">מגירה ריקה</div>
+        <h2>הקטלוג מחכה לספר הראשון</h2>
+        <p>לוחצים על "הוספת ספר", מקלידים את מספר ה־ISBN שעל גב הספר, וכל הפרטים יתמלאו. אחר כך כל אחד מהבית יכול לכתוב איך היה לו לקרוא אותו.</p>
+        <button class="btn primary" type="button" data-action="add">הוספת הספר הראשון</button>
+      </div>`;
+      return;
+    }
+    const list = visibleBooks();
+    if (!list.length) {
+      wrap.innerHTML = `<div class="empty"><h2>אין כאן ספרים</h2><p>שום ספר לא מתאים לחיפוש או למגירה שנבחרה.</p><button class="btn" type="button" data-action="clear-filter">הצגת כל הספרים</button></div>`;
+      return;
+    }
+    wrap.innerHTML = `<div class="shelf">${list.map(b => {
+      const revs = reviewsOf(b);
+      const avg = avgRating(b);
+      const dots = MEMBERS.filter(m => b.reviews && b.reviews[m.id]).map(m => {
+        const st = b.reviews[m.id].status;
+        return `<span class="dot ${st === "done" ? "done" : st === "reading" ? "reading" : ""}" style="--c:${m.color}" title="${m.he}: ${STATUS[st] ? STATUS[st].he : ""}">${m.he[0]}</span>`;
+      }).join("");
+      return `<button class="book" type="button" data-open="${esc(b.id)}" aria-label="${esc(b.title)}">
+        <div class="cover">${coverHtml(b)}</div>
+        <div class="book-meta">
+          <span class="book-title">${esc(b.title)}</span>
+          <span class="book-author">${esc((b.authors || []).join(", "))}</span>
+          <span class="stamps">${dots}${avg ? `<span class="avg">★ ${avg.toFixed(1)}</span>` : ""}${!revs.length ? "" : ""}</span>
+        </div>
+      </button>`;
+    }).join("")}</div>`;
+  }
+  function renderCounters() {
+    const books = store.books;
+    $("#cnt-books").textContent = books.length;
+    $("#cnt-reviews").textContent = books.reduce((a, b) => a + reviewsOf(b).filter(([, v]) => v.note || v.rating).length, 0);
+    $("#cnt-reading").textContent = books.reduce((a, b) => a + reviewsOf(b).filter(([, v]) => v.status === "reading").length, 0);
+  }
+  function renderMode() {
+    const note = $("#mode-note");
+    if (store.mode === "shared") { note.textContent = "הקטלוג משותף: כל מי שפותח את הדף רואה את אותם ספרים ואת אותן חוות דעת."; $("#local-tools").hidden = true; }
+    else if (store.mode === "local") { note.textContent = "הקטלוג נשמר בדפדפן הזה. כדאי לגבות אותו לקובץ מדי פעם."; $("#local-tools").hidden = false; }
+  }
+  function render() {
+    renderReaders(); renderDrawers(); renderShelf(); renderCounters(); renderMode();
+    if (openId && $("#book-dlg").open) renderBookCard();
+  }
+
+  /* ---------------- Book card ---------------- */
+  let descOpen = false;
+  let draft = null; // my review being edited
+  function openBook(id) {
+    openId = id; descOpen = false; draft = null;
+    renderBookCard();
+    const d = $("#book-dlg"); if (!d.open) d.showModal();
+  }
+  function renderBookCard() {
+    const b = store.books.find(x => x.id === openId);
+    const sheet = $("#book-sheet");
+    if (!b) { $("#book-dlg").close(); return; }
+    const author0 = (b.authors || [])[0] || b.title || "";
+    const callNo = (author0.replace(/[^\p{L}]/gu, "").slice(0, 3) || "ספר") + " " + (b.year || "");
+    const fields = [
+      ["מחבר", (b.authors || []).join(", ")],
+      ["תרגום", b.translator],
+      ["הוצאה", b.publisher],
+      ["שנה", b.year],
+      ["עמודים", b.pages],
+      ["שפה", b.language],
+      ["מדף", b.shelf],
+    ].filter(([, v]) => v);
+    const added = `נכנס לקטלוג ${fmtDate(b.addedAt)}${b.addedBy && M[b.addedBy] ? ` · ע״י ${M[b.addedBy].he}` : ""}`;
+    const desc = b.description || "";
+    const long = desc.length > 420;
+
+    const entries = MEMBERS.map(m => {
+      const r = b.reviews && b.reviews[m.id];
+      if (m.id === me) return ""; // mine is rendered as a form
+      if (!r) return "";
+      return `<div class="entry" style="--c:${m.color}">
+        <span class="avatar">${m.he[0]}</span>
+        <div>
+          <div class="who"><b>${m.he}</b>${STATUS[r.status] ? `<span class="status-stamp">${STATUS[r.status].stamp}</span>` : ""}${r.rating ? starsHtml(r.rating) : ""}<span class="date">${fmtDate(r.updatedAt)}</span></div>
+          ${r.note ? `<div class="note">${esc(r.note)}</div>` : `<div class="note empty-note">עוד לא כתב/ה מילים.</div>`}
+        </div>
+      </div>`;
+    }).join("");
+
+    let mine = "";
+    if (me) {
+      const m = M[me];
+      const saved = (b.reviews && b.reviews[me]) || null;
+      if (!draft) draft = { status: saved?.status || "", rating: saved?.rating || 0, note: saved?.note || "" };
+      mine = `<div class="entry mine" style="--c:${m.color}">
+        <span class="avatar">${m.he[0]}</span>
+        <div class="my-form">
+          <div class="who"><b>${m.he}</b><span class="date">${saved ? "עודכן " + fmtDate(saved.updatedAt) : "החוויה שלך עם הספר"}</span></div>
+          <div class="seg" role="group" aria-label="סטטוס קריאה">
+            ${Object.entries(STATUS).map(([k, v]) => `<button type="button" data-status="${k}" aria-pressed="${draft.status === k}">${v.he}</button>`).join("")}
+          </div>
+          <div class="row"><span>דירוג:</span>
+            <span class="star-input" role="group" aria-label="דירוג">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-star="${n}" class="${n <= draft.rating ? "on" : ""}" aria-label="${n} כוכבים">★</button>`).join("")}</span>
+          </div>
+          <textarea class="note-in" id="my-note" placeholder="איך היה לקרוא? מה נשאר איתך?">${esc(draft.note)}</textarea>
+          <div class="row">
+            <button class="btn primary" type="button" data-action="save-review">שמירת חוות הדעת</button>
+            ${saved ? `<button class="btn ghost danger" type="button" data-action="del-review">מחיקת חוות הדעת שלי</button>` : ""}
+          </div>
+        </div>
+      </div>`;
+    } else {
+      mine = `<div class="entry"><span></span><div><button class="btn" type="button" data-action="pick-me">בחרו מי אתם כדי לכתוב חוות דעת</button></div></div>`;
+    }
+    const count = reviewsOf(b).length;
+    const avg = avgRating(b);
+
+    sheet.innerHTML = `
+      <button class="close" type="button" data-close aria-label="סגירה">×</button>
+      <article class="index-card">
+        <div class="callno"><span class="mono">${esc(callNo)}</span><span class="mono">ISBN ${esc(prettyIsbn(b.isbn) || "—")}</span></div>
+        <div class="card-body">
+          <div class="cover">${coverHtml(b)}</div>
+          <div style="min-width:0">
+            <h2>${esc(b.title)}</h2>
+            ${b.subtitle ? `<div class="sub">${esc(b.subtitle)}</div>` : ""}
+            <dl class="fields">${fields.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+            ${(b.categories || []).length ? `<div class="tags">${b.categories.map(c => `<span class="tag">${esc(c)}</span>`).join("")}</div>` : ""}
+            ${desc ? `<div class="desc ${long && !descOpen ? "clamped" : ""}">${esc(desc)}</div>${long ? `<button class="linkish" type="button" data-action="toggle-desc">${descOpen ? "פחות" : "להמשך התקציר"}</button>` : ""}` : ""}
+            ${b.aiSourced ? `<p class="status-line" style="margin-top:.6rem">הפרטים זוהו על ידי Claude. כדאי לוודא מול הספר.</p>` : ""}
+            <div class="card-actions">
+              <button class="btn" type="button" data-action="edit">עריכת פרטים</button>
+              <button class="btn ghost danger" type="button" data-action="delete">הוצאה מהקטלוג</button>
+            </div>
+            <p class="status-line" style="color:var(--muted);font-size:.82rem;margin-top:.6rem">${esc(added)}</p>
+          </div>
+        </div>
+      </article>
+      <section class="slip" aria-label="כרטיס הקוראים">
+        <div class="slip-head"><h3>כרטיס הקוראים</h3><small>${count ? `${count} קוראים${avg ? ` · ממוצע ★ ${avg.toFixed(1)}` : ""}` : "אף אחד עוד לא רשום על הספר הזה"}</small></div>
+        <div class="entries">${mine}${entries}</div>
+      </section>`;
+  }
+
+  async function saveReview() {
+    const b = store.books.find(x => x.id === openId); if (!b || !me) return;
+    const note = ($("#my-note")?.value || "").trim();
+    draft.note = note;
+    if (!draft.status && !draft.rating && !note) { toast("בחרו סטטוס, דירוג או כתבו כמה מילים."); return; }
+    const entry = { status: draft.status || "done", rating: draft.rating || 0, note, updatedAt: Date.now() };
+    try {
+      await store.update(b.id, { reviews: { [me]: entry } });
+      draft = null; toast("חוות הדעת נשמרה");
+      renderBookCard();
+    } catch (e) { toast(dbErr(e)); }
+  }
+  async function deleteReview() {
+    const b = store.books.find(x => x.id === openId); if (!b || !me) return;
+    try { await store.update(b.id, { reviews: { [me]: null } }); draft = null; toast("חוות הדעת נמחקה"); renderBookCard(); }
+    catch (e) { toast(dbErr(e)); }
+  }
+
+  /* ---------------- Confirm ---------------- */
+  function confirmBox(text) {
+    return new Promise(res => {
+      const d = $("#confirm-dlg"); $("#confirm-text").textContent = text;
+      const done = v => { d.close(); res(v); };
+      $("#confirm-yes").onclick = () => done(true);
+      $("#confirm-no").onclick = () => done(false);
+      d.oncancel = () => res(false);
+      d.showModal();
+    });
+  }
+
+  /* ---------------- Add / edit form ---------------- */
+  let editingId = null;
+  let formCover = "";
+  let photoBlob = null;
+  let formAi = false;
+  const F = id => $("#f-" + id);
+  function setCoverPreview() {
+    const title = F("title").value.trim();
+    $("#f-cover-prev").innerHTML = coverHtml({ title: title || "שם הספר", authors: splitList(F("authors").value), cover: formCover });
+    $("#cover-clear").hidden = !formCover;
+  }
+  function fillForm(b) {
+    F("isbn").value = b.isbn ? prettyIsbn(b.isbn) : "";
+    F("title").value = b.title || ""; F("subtitle").value = b.subtitle || "";
+    F("authors").value = (b.authors || []).join(", "); F("translator").value = b.translator || "";
+    F("publisher").value = b.publisher || ""; F("year").value = b.year || ""; F("pages").value = b.pages || "";
+    F("lang").value = b.language || ""; F("cats").value = (b.categories || []).join(", ");
+    F("shelf").value = b.shelf || ""; F("desc").value = b.description || "";
+    formCover = b.cover || ""; formAi = !!b.aiSourced;
+    setCoverPreview();
+  }
+  function openForm(book) {
+    editingId = book ? book.id : null;
+    photoBlob = null;
+    $("#form-title").textContent = book ? "עריכת כרטיס" : "ספר חדש בקטלוג";
+    $("#save-btn").textContent = book ? "שמירת שינויים" : "שמירה בקטלוג";
+    fillForm(book || {});
+    setStatus("");
+    updateAiUi();
+    $("#form-dlg").showModal();
+    if (!book) setTimeout(() => F("isbn").focus(), 30);
+  }
+  function setStatus(msg, kind) { const s = $("#lookup-status"); s.textContent = msg; s.className = "status-line" + (kind ? " " + kind : ""); }
+  function updateAiUi() {
+    $("#photo-ai-btn").hidden = !(store.sample && photoBlob);
+  }
+
+  /* ISBN lookup — online catalogues first, Claude as a fallback */
+  async function fetchJson(url, ms = 7000) {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+    try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); }
+    finally { clearTimeout(t); }
+  }
+  async function fromGoogle(isbn) {
+    const j = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+    const v = j.items && j.items[0] && j.items[0].volumeInfo; if (!v) return null;
+    const img = v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail);
+    return {
+      title: v.title, subtitle: v.subtitle, authors: v.authors, publisher: v.publisher,
+      year: (v.publishedDate || "").slice(0, 4), pages: v.pageCount, language: langName(v.language),
+      categories: v.categories, description: v.description,
+      cover: img ? img.replace(/^http:/, "https:").replace("&edge=curl", "") : "",
+    };
+  }
+  async function fromOpenLibrary(isbn) {
+    const j = await fetchJson(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
+    const v = j["ISBN:" + isbn]; if (!v) return null;
+    return {
+      title: v.title, subtitle: v.subtitle, authors: (v.authors || []).map(a => a.name),
+      publisher: (v.publishers || [])[0]?.name, year: (String(v.publish_date || "").match(/\d{4}/) || [""])[0],
+      pages: v.number_of_pages, categories: (v.subjects || []).slice(0, 4).map(s => s.name),
+      description: typeof v.notes === "string" ? v.notes : "",
+      cover: v.cover ? (v.cover.large || v.cover.medium) : "",
+    };
+  }
+  function langName(code) {
+    return ({ he: "עברית", iw: "עברית", en: "אנגלית", ar: "ערבית", ru: "רוסית", fr: "צרפתית", de: "גרמנית", es: "ספרדית", it: "איטלקית" })[code] || code || "";
+  }
+  async function fromClaude(isbn) {
+    if (!store.sample) return null;
+    const prompt = `You identify books for a family home-library catalogue (the family reads Hebrew and English).
+Book ISBN: ${isbn}
+Return ONLY a JSON object with these keys:
+{"found": boolean, "title": string, "subtitle": string, "authors": string[], "translator": string, "publisher": string, "year": string, "pages": number|null, "language": string (in Hebrew, e.g. "עברית"), "categories": string[] (1-3 short genres, in Hebrew), "description": string (2-3 sentence summary, in the book's language; Hebrew if the book is Hebrew)}
+Use the title and names as printed on the book (Hebrew script for Hebrew books). If you are not confident which book this exact ISBN is, return {"found": false}. Never guess a different book.`;
+    const r = await store.sample.json(prompt, { modelTier: "default" });
+    if (!r || !r.found || !r.title) return null;
+    return { ...r, aiSourced: true };
+  }
+  function mergeInfo(a, b) {
+    if (!a) return b; if (!b) return a;
+    const out = { ...b };
+    for (const [k, v] of Object.entries(a)) if (v && (!Array.isArray(v) || v.length)) out[k] = v;
+    return out;
+  }
+  async function lookup() {
+    const raw = cleanIsbn(F("isbn").value);
+    if (!validIsbn(raw)) { setStatus("זה לא נראה כמו ISBN תקין. בודקים שיש 10 או 13 ספרות, בדיוק כמו בגב הספר.", "err"); return; }
+    const isbn = toIsbn13(raw);
+    F("isbn").value = prettyIsbn(isbn);
+    const dup = store.books.find(b => b.isbn === isbn && b.id !== editingId);
+    if (dup) { setStatus(`הספר "${dup.title}" כבר נמצא בקטלוג.`, "err"); return; }
+    const btn = $("#lookup-btn"); btn.disabled = true;
+    setStatus("מחפשים בקטלוגים…");
+    let info = null, netOk = false;
+    try {
+      const [g, o] = await Promise.allSettled([fromGoogle(isbn), fromOpenLibrary(isbn)]);
+      netOk = g.status === "fulfilled" || o.status === "fulfilled";
+      info = mergeInfo(g.value, o.value);
+      if (info && !info.cover && o.status === "fulfilled") info.cover = "";
+    } catch { /* offline or blocked */ }
+    if (!info && store.sample) {
+      setStatus(netOk ? "לא נמצא בקטלוגים. שואלים את Claude…" : "שואלים את Claude…");
+      try { info = await fromClaude(isbn); }
+      catch (e) { if (e && e.code === "not_granted") store.sample = null; }
+    }
+    btn.disabled = false;
+    if (!info) {
+      setStatus("לא מצאנו את הספר הזה. אפשר למלא את הפרטים ידנית, או לצלם את הכריכה.", "err");
+      return;
+    }
+    const keepCover = formCover;
+    fillForm({ ...info, isbn, shelf: F("shelf").value, cover: info.cover || keepCover });
+    setStatus(info.aiSourced ? "Claude זיהה את הספר. כדאי לעבור על הפרטים לפני השמירה." : "נמצא! עוברים על הפרטים ושומרים.", "ok");
+  }
+
+  /* Photos: shrink to a small JPEG so it fits in the shared catalogue */
+  function shrink(file, maxH = 600) {
+    return new Promise((res, rej) => {
+      const img = new Image(); const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const scale = Math.min(1, maxH / img.naturalHeight, 420 / img.naturalWidth);
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        const dataUrl = c.toDataURL("image/jpeg", 0.78);
+        c.toBlob(blob => res({ dataUrl, blob }), "image/jpeg", 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("bad image")); };
+      img.src = url;
+    });
+  }
+  async function identifyFromPhoto() {
+    if (!store.sample || !photoBlob) return;
+    const btn = $("#photo-ai-btn"); btn.disabled = true;
+    setStatus("Claude מסתכל על התמונה…");
+    try {
+      const r = await store.sample.json(
+        `This photo shows a book (front cover, back cover or title page) for a family home-library catalogue.
+Read what is printed on it. Return ONLY JSON: {"found": boolean, "isbn": string (digits only, if visible), "title": string, "subtitle": string, "authors": string[], "translator": string, "publisher": string, "year": string, "language": string (in Hebrew, e.g. "עברית"), "categories": string[] (1-3 short genres in Hebrew), "description": string (2-3 sentences in the book's language, only if you know this book)}.
+Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field, use an empty string. If this is not a book, return {"found": false}.`,
+        { images: photoBlob, modelTier: "default" });
+      if (!r || !r.found) { setStatus("לא הצלחנו לזהות ספר בתמונה. נסו צילום חד יותר של הכריכה או של הברקוד.", "err"); return; }
+      const isbn = cleanIsbn(r.isbn);
+      fillForm({ ...r, isbn: validIsbn(isbn) ? toIsbn13(isbn) : "", shelf: F("shelf").value, cover: formCover, aiSourced: true });
+      setStatus("זוהה מהתמונה. כדאי לעבור על הפרטים לפני השמירה.", "ok");
+    } catch (e) {
+      if (e && e.code === "not_granted") { store.sample = null; updateAiUi(); setStatus("הזיהוי מתמונה לא אושר. אפשר למלא ידנית.", "err"); }
+      else setStatus("הזיהוי לא הצליח הפעם. אפשר למלא ידנית.", "err");
+    } finally { btn.disabled = false; }
+  }
+
+  async function submitForm(ev) {
+    ev.preventDefault();
+    const title = F("title").value.trim();
+    if (!title) { setStatus("חסר שם לספר.", "err"); F("title").focus(); return; }
+    const raw = cleanIsbn(F("isbn").value);
+    const isbn = validIsbn(raw) ? toIsbn13(raw) : "";
+    const dup = isbn && store.books.find(b => b.isbn === isbn && b.id !== editingId);
+    if (dup) { setStatus(`הספר "${dup.title}" כבר נמצא בקטלוג.`, "err"); return; }
+    const fields = {
+      isbn, title, subtitle: F("subtitle").value.trim(), authors: splitList(F("authors").value),
+      translator: F("translator").value.trim(), publisher: F("publisher").value.trim(),
+      year: F("year").value.trim(), pages: parseInt(F("pages").value, 10) || null, language: F("lang").value.trim(),
+      categories: splitList(F("cats").value), shelf: F("shelf").value.trim(), description: F("desc").value.trim(),
+      cover: formCover, aiSourced: formAi,
+    };
+    const btn = $("#save-btn"); btn.disabled = true;
+    try {
+      if (editingId) { await store.update(editingId, fields); toast("הכרטיס עודכן"); }
+      else {
+        const book = { id: newId(), ...fields, reviews: {}, addedAt: Date.now(), addedBy: me || "" };
+        await store.add(book); toast(`"${title}" נכנס לקטלוג`);
+        $("#form-dlg").close(); openBook(book.id); return;
+      }
+      $("#form-dlg").close();
+    } catch (e) { setStatus(dbErr(e), "err"); }
+    finally { btn.disabled = false; }
+  }
+
+  /* ---------------- Who am I ---------------- */
+  function setMe(id) { me = id; ls.set("homeLibrary.me", id); draft = null; render(); }
+  function openWho() {
+    $("#who-grid").innerHTML = MEMBERS.map(m =>
+      `<button class="who-card" type="button" data-pick="${m.id}" style="--c:${m.color}"><span class="avatar">${m.he[0]}</span><b>${m.he}</b></button>`).join("");
+    $("#who-dlg").showModal();
+  }
+
+  /* ---------------- Backup (browser-only mode) ---------------- */
+  function exportJson() {
+    const blob = new Blob([JSON.stringify({ app: "homeLibrary", v: 1, books: store.books }, null, 1)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `home-library-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  async function importJson(file) {
+    try {
+      const j = JSON.parse(await file.text());
+      if (!Array.isArray(j.books)) throw 0;
+      const byId = new Map(store.books.map(b => [b.id, b]));
+      for (const b of j.books) if (b && b.id && b.title) byId.set(b.id, b);
+      store.books = [...byId.values()]; store.persistLocal(); toast(`שוחזרו ${j.books.length} ספרים`);
+    } catch { toast("הקובץ הזה לא נראה כמו גיבוי של הספרייה."); }
+  }
+
+  /* ---------------- Events ---------------- */
+  document.addEventListener("click", async e => {
+    const t = e.target.closest("button, [data-close]");
+    if (e.target.tagName === "DIALOG") { e.target.close(); return; } // backdrop click
+    if (!t) return;
+    if (t.matches("[data-close]")) { t.closest("dialog").close(); return; }
+    if (t.dataset.me) { setMe(t.dataset.me); return; }
+    if (t.dataset.pick) { setMe(t.dataset.pick); $("#who-dlg").close(); return; }
+    if (t.dataset.filter) { filter = t.dataset.filter; renderDrawers(); renderShelf(); return; }
+    if (t.dataset.open) { openBook(t.dataset.open); return; }
+    if (t.dataset.status) { draft.note = $("#my-note").value; draft.status = t.dataset.status; renderBookCard(); return; }
+    if (t.dataset.star) { draft.note = $("#my-note").value; const n = +t.dataset.star; draft.rating = draft.rating === n ? 0 : n; renderBookCard(); return; }
+    const act = t.dataset.action;
+    if (act === "add") openForm(null);
+    else if (act === "clear-filter") { filter = "all"; $("#q").value = ""; render(); }
+    else if (act === "toggle-desc") { descOpen = !descOpen; if (draft) draft.note = $("#my-note")?.value ?? draft.note; renderBookCard(); }
+    else if (act === "save-review") saveReview();
+    else if (act === "del-review") deleteReview();
+    else if (act === "pick-me") openWho();
+    else if (act === "edit") { const b = store.books.find(x => x.id === openId); $("#book-dlg").close(); openForm(b); }
+    else if (act === "delete") {
+      const b = store.books.find(x => x.id === openId); if (!b) return;
+      $("#book-dlg").close();
+      if (await confirmBox(`להוציא את "${b.title}" מהקטלוג? גם חוות הדעת עליו יימחקו.`)) {
+        try { await store.remove(b.id); toast("הספר הוצא מהקטלוג"); } catch (err) { toast(dbErr(err)); }
+      } else openBook(b.id);
+    }
+  });
+  $("#add-btn").addEventListener("click", () => openForm(null));
+  $("#q").addEventListener("input", renderShelf);
+  $("#sort").addEventListener("change", renderShelf);
+  $("#lookup-btn").addEventListener("click", lookup);
+  F("isbn").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); lookup(); } });
+  F("title").addEventListener("input", setCoverPreview);
+  F("authors").addEventListener("input", setCoverPreview);
+  $("#book-form").addEventListener("submit", submitForm);
+  F("photo").addEventListener("change", async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    try {
+      const { dataUrl, blob } = await shrink(file);
+      formCover = dataUrl; photoBlob = blob; setCoverPreview(); updateAiUi();
+      if (store.sample) setStatus("התמונה נוספה. אפשר ללחוץ \"זיהוי הספר מהתמונה\" כדי למלא פרטים.");
+    } catch { setStatus("לא הצלחנו לקרוא את התמונה. נסו קובץ JPG או PNG.", "err"); }
+  });
+  $("#photo-ai-btn").addEventListener("click", identifyFromPhoto);
+  $("#cover-clear").addEventListener("click", () => { formCover = ""; photoBlob = null; setCoverPreview(); updateAiUi(); });
+  $("#export-btn").addEventListener("click", exportJson);
+  $("#import-file").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) importJson(f); });
+  $("#book-dlg").addEventListener("close", () => { openId = null; draft = null; });
+
+  /* ---------------- Boot ---------------- */
+  renderReaders();
+  store.init();
+  document.addEventListener("error", e => { if (e.target.tagName === "IMG" && e.target.closest(".cover")) e.target.remove(); }, true);
+})();
+</script>
+
+</body>
+</html>
