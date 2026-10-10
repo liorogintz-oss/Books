@@ -260,6 +260,20 @@ dialog::backdrop { background: rgb(15 22 19 / .55); backdrop-filter: blur(2px); 
 .gr-quick .btn { padding: .25rem .6rem; }
 .tag.genre { background: var(--primary); color: var(--primary-ink); border-color: transparent; font-weight: 600; }
 .book-genre { font-size: .78rem; color: var(--primary); font-weight: 600; }
+.author-sheet { padding: var(--s-5); display: grid; gap: var(--s-4); }
+.author-sheet h2 { font-size: 1.6rem; padding-inline-end: 2.6rem; }
+.author-sheet h3 { font-family: var(--f-display); font-size: 1.1rem; display: flex; gap: var(--s-2); align-items: baseline; }
+.author-sheet h3 small { color: var(--muted); font-family: var(--f-body); font-weight: 400; font-size: .85rem; }
+.works { display: grid; gap: var(--s-2); }
+.work { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: var(--s-3); align-items: center; padding: var(--s-2); border: 1px solid var(--line); border-radius: 4px; background: var(--card); }
+.work .thumb { width: 48px; aspect-ratio: 2 / 3; border-radius: 2px; background: var(--bg-2); overflow: hidden; position: relative; }
+.work .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.work b { font-family: var(--f-display); display: block; overflow-wrap: anywhere; }
+.work .meta { color: var(--muted); font-size: .82rem; display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.work .meta .st { color: var(--star); font-family: var(--f-mono); }
+.work .have { font-size: .72rem; font-weight: 700; color: var(--primary-ink); background: var(--primary); border-radius: 3px; padding: 0 .4rem; }
+.work .links { display: grid; gap: 2px; justify-items: end; font-size: .85rem; }
+.work.mine { cursor: pointer; border-color: var(--primary); }
 .tags { display: flex; gap: var(--s-1); flex-wrap: wrap; margin-top: var(--s-3); }
 .tag { font-size: .78rem; padding: 0 .5rem; border-radius: 3px; background: var(--bg-2); border: 1px solid var(--line); line-height: 1.5rem; }
 .card-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-5); }
@@ -584,6 +598,14 @@ textarea.note-in {
       <button class="btn" type="button" id="dup-copy"><span>הוספת עותק נוסף<small>יש לנו עוד עותק של הספר הזה בבית.</small></span></button>
       <button class="btn" type="button" id="dup-mistake"><span>טעות בסריקה<small>לא משנים כלום<span id="dup-rescan-note">, וחוזרים לסרוק</span>.</small></span></button>
     </div>
+  </div>
+</dialog>
+
+<!-- Author's books -->
+<dialog id="author-dlg" dir="rtl" lang="he" aria-label="ספרים של המחבר">
+  <div class="sheet author-sheet">
+    <button class="close" type="button" data-close aria-label="סגירה">×</button>
+    <div id="author-body"></div>
   </div>
 </dialog>
 
@@ -1029,6 +1051,7 @@ textarea.note-in {
             ${b.backText ? `<h3 class="sect">מהכריכה האחורית</h3><div class="desc">${esc(b.backText)}</div>` : ""}
             ${b.aiSourced ? `<p class="status-line" style="margin-top:.6rem">הפרטים זוהו על ידי Claude. כדאי לוודא מול הספר.</p>` : ""}
             <div class="card-actions">
+              ${(b.authors || [])[0] ? `<button class="btn" type="button" data-action="author-books">ספרים נוספים של ${esc(b.authors[0])}</button>` : ""}
               <button class="btn" type="button" data-action="edit">עריכת פרטים</button>
               <button class="btn ghost danger" type="button" data-action="delete">הוצאה מהקטלוג</button>
             </div>
@@ -1210,6 +1233,57 @@ textarea.note-in {
     out.description = cleanOlText(typeof work.description === "string" ? work.description : work.description && work.description.value) || out.description;
     if (sum && sum.average && sum.count) out.olRating = { avg: Math.round(sum.average * 100) / 100, count: sum.count };
     return out;
+  }
+  /* Other books by an author: the home shelf plus Open Library's list of the author's works. */
+  const normTitle = t => String(t || "").toLowerCase().split(/[:(]/)[0].replace(/^(the|a|an)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const sameAuthor = (a, b) => normTitle(a).replace(/\s/g, "") === normTitle(b).replace(/\s/g, "");
+  const authorWorksCache = new Map();
+  async function authorWorks(name) {
+    if (authorWorksCache.has(name)) return authorWorksCache.get(name);
+    const url = "https://openlibrary.org/search.json?author=" + encodeURIComponent(name) +
+      "&sort=editions&limit=60&fields=key,title,author_name,first_publish_year,cover_i,ratings_average,ratings_count,edition_count";
+    const j = await fetchJson(url, 10000);
+    const seen = new Set(), out = [];
+    for (const d of j.docs || []) {
+      // Keep books the author wrote, not study guides or summaries "about" them.
+      if (!(d.author_name || []).some(a => sameAuthor(a, name))) continue;
+      const k = normTitle(d.title); if (!k || seen.has(k)) continue;
+      if (/summary|study guide|sparknotes|boxed set|collection|books? set|\bnovels\b.*\bset\b/i.test(d.title)) continue;
+      seen.add(k); out.push(d);
+      if (out.length >= 30) break;
+    }
+    authorWorksCache.set(name, out);
+    return out;
+  }
+  async function openAuthor(name) {
+    const body = $("#author-body");
+    const mine = store.books.filter(b => (b.authors || []).some(a => sameAuthor(a, name)));
+    const mineKeys = new Map(mine.map(b => [normTitle(b.title), b]));
+    const grAuthor = "https://www.goodreads.com/search?q=" + encodeURIComponent(name) + "&search_type=books&search%5Bfield%5D=author";
+    const head = `<h2>הספרים של ${esc(name)}</h2>
+      <h3>אצלנו בבית <small>${mine.length} ${mine.length === 1 ? "ספר" : "ספרים"}</small></h3>
+      <div class="works">${mine.map(b => `<div class="work mine" data-open="${esc(b.id)}" role="button" tabindex="0">
+        <div class="thumb">${b.cover ? `<img src="${esc(b.cover)}" alt="">` : ""}</div>
+        <div><b>${esc(b.title)}</b><div class="meta">${b.year ? `<span>${esc(b.year)}</span>` : ""}${b.grRating ? `<span class="st">★ ${Number(b.grRating).toFixed(2)}</span>` : ""}</div></div><span></span></div>`).join("")}</div>
+      <h3>עוד ספרים שפרסם/ה <small id="works-count"></small></h3>`;
+    body.innerHTML = head + `<p class="status-line" id="works-status">מחפשים ב־Open Library…</p><div class="works" id="works-list"></div>
+      <a class="ext" href="${esc(grAuthor)}" target="_blank" rel="noopener">כל הספרים של ${esc(name)} ב־Goodreads ↗</a>`;
+    const d = $("#author-dlg"); if (!d.open) d.showModal();
+    let works;
+    try { works = await authorWorks(name); }
+    catch { $("#works-status").textContent = "לא הצלחנו להגיע ל־Open Library. אפשר לראות את הרשימה המלאה ב־Goodreads."; return; }
+    if (!d.open) return;
+    const others = works.filter(w => !mineKeys.has(normTitle(w.title)));
+    $("#works-count").textContent = others.length ? `${others.length} ספרים` : "";
+    $("#works-status").textContent = others.length ? "" : (works.length ? "יש לכם בבית את כל הספרים שמצאנו שלו/ה." : "לא מצאנו ספרים נוספים ב־Open Library.");
+    $("#works-list").innerHTML = others.map(w => {
+      const gr = "https://www.goodreads.com/search?q=" + encodeURIComponent(w.title + " " + name);
+      return `<div class="work">
+        <div class="thumb">${w.cover_i ? `<img src="https://covers.openlibrary.org/b/id/${w.cover_i}-S.jpg" alt="" loading="lazy">` : ""}</div>
+        <div><b>${esc(w.title)}</b><div class="meta">${w.first_publish_year ? `<span>${w.first_publish_year}</span>` : ""}${w.ratings_average && w.ratings_count >= 5 ? `<span class="st">★ ${w.ratings_average.toFixed(1)}</span>` : ""}</div></div>
+        <div class="links"><a class="ext" href="${esc(gr)}" target="_blank" rel="noopener">Goodreads ↗</a><a class="ext" href="https://openlibrary.org${esc(w.key)}" target="_blank" rel="noopener">Open Library ↗</a></div>
+      </div>`;
+    }).join("");
   }
   function goodreadsUrl(b) {
     if (b.isbn) return "https://www.goodreads.com/book/isbn/" + b.isbn;
@@ -1652,14 +1726,14 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
 
   /* ---------------- Events ---------------- */
   document.addEventListener("click", async e => {
-    const t = e.target.closest("button, [data-close]");
+    const t = e.target.closest("button, [data-close], [data-open]");
     if (e.target.tagName === "DIALOG") { e.target.close(); return; } // backdrop click
     if (!t) return;
     if (t.matches("[data-close]")) { t.closest("dialog").close(); return; }
     if (t.dataset.me) { setMe(t.dataset.me); return; }
     if (t.dataset.pick) { setMe(t.dataset.pick); $("#who-dlg").close(); return; }
     if (t.dataset.filter) { filter = t.dataset.filter; renderDrawers(); renderShelf(); return; }
-    if (t.dataset.open) { openBook(t.dataset.open); return; }
+    if (t.dataset.open) { const ad = t.closest("#author-dlg"); if (ad) ad.close(); openBook(t.dataset.open); return; }
     if (t.dataset.genre !== undefined) {
       const g = t.dataset.genre;
       genreFilter = genreFilter === g && !t.closest("dialog") ? "" : g;
@@ -1688,6 +1762,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     else if (act === "del-review") deleteReview();
     else if (act === "pick-me") openWho();
     else if (act === "lib") openLib();
+    else if (act === "author-books") { const b = store.books.find(x => x.id === openId); $("#book-dlg").close(); openAuthor(b.authors[0]); }
     else if (act === "edit") { const b = store.books.find(x => x.id === openId); $("#book-dlg").close(); openForm(b); }
     else if (act === "delete") {
       const b = store.books.find(x => x.id === openId); if (!b) return;
@@ -1757,7 +1832,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
   /* ---------------- Boot ---------------- */
   renderReaders();
   store.init();
-  document.addEventListener("error", e => { if (e.target.tagName === "IMG" && e.target.closest(".cover")) e.target.remove(); }, true);
+  document.addEventListener("error", e => { if (e.target.tagName === "IMG" && e.target.closest(".cover, .thumb")) e.target.remove(); }, true);
 })();
 </script>
 
