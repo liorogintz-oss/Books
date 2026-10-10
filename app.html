@@ -477,7 +477,7 @@ textarea.note-in {
         <div class="fld"><label for="f-publisher">הוצאה</label><input id="f-publisher"></div>
         <div class="fld"><label for="f-year">שנה</label><input id="f-year" inputmode="numeric"></div>
         <div class="fld"><label for="f-pages">עמודים</label><input id="f-pages" inputmode="numeric"></div>
-        <div class="fld"><label for="f-lang">שפה</label><input id="f-lang"></div>
+        <div class="fld"><label for="f-lang">שפת הספר</label><select id="f-lang" class="sort"><option value="">לא ידוע</option><option value="עברית">עברית</option><option value="אנגלית">אנגלית</option></select></div>
         <div class="fld"><label for="f-copies">עותקים בבית</label><input id="f-copies" type="number" min="1" max="99" inputmode="numeric"></div>
         <div class="fld wide"><label for="f-cats">נושאים / ז׳אנר (מופרדים בפסיק)</label><input id="f-cats"></div>
         <div class="fld wide"><label for="f-shelf">איפה הוא עומד בבית</label><input id="f-shelf" placeholder="למשל: הסלון, מדף עליון"></div>
@@ -1008,7 +1008,7 @@ textarea.note-in {
     F("title").value = b.title || ""; F("subtitle").value = b.subtitle || "";
     F("authors").value = (b.authors || []).join(", "); F("translator").value = b.translator || "";
     F("publisher").value = b.publisher || ""; F("year").value = b.year || ""; F("pages").value = b.pages || "";
-    F("lang").value = b.language || ""; F("cats").value = (b.categories || []).join(", ");
+    F("lang").value = normLang(b.language) || guessLang(b.title); F("cats").value = (b.categories || []).join(", ");
     F("shelf").value = b.shelf || ""; F("desc").value = b.description || "";
     F("copies").value = b.copies || 1;
     F("backtext").value = b.backText || "";
@@ -1066,6 +1066,19 @@ textarea.note-in {
       description: typeof v.notes === "string" ? v.notes : "",
       cover: v.cover ? (v.cover.large || v.cover.medium) : "",
     };
+  }
+  // The family's books are in Hebrew or English.
+  function normLang(v) {
+    v = String(v || "").trim().toLowerCase();
+    if (/^(he|iw|heb)|עברית/.test(v)) return "עברית";
+    if (/^en|english|אנגלית/.test(v)) return "אנגלית";
+    return "";
+  }
+  function guessLang(text) {
+    const t = String(text || "");
+    if (/[\u0590-\u05FF]/.test(t)) return "עברית";
+    if (/[A-Za-z]/.test(t)) return "אנגלית";
+    return "";
   }
   function langName(code) {
     return ({ he: "עברית", iw: "עברית", en: "אנגלית", ar: "ערבית", ru: "רוסית", fr: "צרפתית", de: "גרמנית", es: "ספרדית", it: "איטלקית" })[code] || code || "";
@@ -1198,9 +1211,10 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
       } else {
         say("טוענים את כלי הקריאה (בפעם הראשונה זה לוקח כמה שניות)…");
         const T = await loadTesseract();
-        const lang = /אנגלית|english/i.test(F("lang").value) ? "eng" : "heb+eng";
+        const bookLang = F("lang").value || guessLang(F("title").value);
+        const lang = bookLang === "אנגלית" ? "eng" : "heb+eng"; // Hebrew blurbs often quote English names
         const worker = await T.createWorker(lang, 1, {
-          logger: m => { if (m.status === "recognizing text") say(`קוראים את הטקסט… ${Math.round(m.progress * 100)}%`); },
+          logger: m => { if (m.status === "recognizing text") say(`קוראים את הטקסט${bookLang ? " ב" + bookLang : ""}… ${Math.round(m.progress * 100)}%`); },
         });
         const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
         const { data } = await worker.recognize(ocrCanvas(img));
@@ -1210,7 +1224,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
       }
       if (!text) { say("לא מצאנו טקסט בתמונה. מצלמים ישר, קרוב ובתאורה טובה.", "err"); return; }
       F("backtext").value = text;
-      say("הטקסט הועתק לשדה \"הטקסט מהכריכה האחורית\". כדאי לעבור עליו ולתקן מילים שלא נקראו נכון.", "ok");
+      say("הטקסט הועתק לשדה \"הטקסט מהכריכה האחורית\". כדאי לעבור עליו ולתקן מילים שלא נקראו נכון. אם הוא יצא משובש, בודקים ששפת הספר נכונה ולוחצים \"קריאת הטקסט מחדש\".", "ok");
     } catch (e) {
       console.warn(e);
       if (e && e.code === "not_granted") store.sample = null;
@@ -1489,7 +1503,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
   $("#scan-dlg").addEventListener("close", stopScan);
   $("#scan-photo").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) scanPhoto(f); });
   F("isbn").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); lookup(); } });
-  F("title").addEventListener("input", setCoverPreview);
+  F("title").addEventListener("input", () => { setCoverPreview(); if (!F("lang").value) F("lang").value = guessLang(F("title").value); });
   F("authors").addEventListener("input", setCoverPreview);
   $("#book-form").addEventListener("submit", submitForm);
   F("photo").addEventListener("change", async e => {
