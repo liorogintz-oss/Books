@@ -697,6 +697,8 @@ textarea.note-in {
       if (cfg && cfg.projectId && window.firebase && window.firebase.firestore) {
         try { if (!firebase.apps.length) firebase.initializeApp(cfg); store.fs = firebase.firestore(); }
         catch (e) { console.warn(e); store.fs = null; }
+        // Keep a copy of the catalogue on the device, so repeat visits show the shelf at once.
+        if (store.fs) { try { await store.fs.enablePersistence({ synchronizeTabs: true }); } catch (e) { /* private mode or another tab */ } }
         if (store.fs) { store.mode = "firebase"; return store.connectLibrary(); }
       }
       const api = window.claude && typeof window.claude.use === "function" ? window.claude : null;
@@ -720,20 +722,59 @@ textarea.note-in {
     },
     col() { return store.fs.collection("libraries/" + store.lib + "/books"); },
     async connectLibrary(key) {
-      key = key || joinKeyFromHash() || ls.get("homeLibrary.lib", null);
+      const saved = ls.get("homeLibrary.lib", null);
+      key = key || joinKeyFromHash() || saved;
       if (!key) { render(); openLib(); return; }
+      const subscribe = () => {
+        store.lib = key; ls.set("homeLibrary.lib", key);
+        if (store.unsub) store.unsub();
+        store.unsub = store.col().onSnapshot(
+          q => { store.books = q.docs.map(d => ({ id: d.id, ...d.data() })); render(); },
+          err => { console.warn(err); toast(dbErr(err)); }
+        );
+        if ($("#lib-dlg").open) $("#lib-dlg").close();
+        render();
+      };
+      // A library this device already joined opens straight away; it is re-checked in the background.
+      if (key === saved) subscribe();
       let snap;
       try { snap = await store.fs.doc("libraries/" + key).get(); }
-      catch (e) { console.warn(e); render(); openLib("אין חיבור למסד הנתונים. בדקו את האינטרנט ונסו שוב."); return; }
-      if (!snap.exists) { ls.set("homeLibrary.lib", null); store.lib = null; render(); openLib("הקוד הזה לא שייך לאף ספרייה. בדקו שהעתקתם אותו במלואו."); return; }
-      store.lib = key; ls.set("homeLibrary.lib", key);
-      if (store.unsub) store.unsub();
-      store.unsub = store.col().onSnapshot(
-        q => { store.books = q.docs.map(d => ({ id: d.id, ...d.data() })); render(); },
-        err => { console.warn(err); toast(dbErr(err)); }
-      );
-      if ($("#lib-dlg").open) $("#lib-dlg").close();
-      render();
+      catch (e) { console.warn(e); if (key !== saved) { render(); openLib("אין חיבור למסד הנתונים. בדקו את האינטרנט ונסו שוב."); } return; }
+      if (!snap.exists) {
+        if (store.unsub) { store.unsub(); store.unsub = null; }
+        ls.set("homeLibrary.lib", null); store.lib = null; store.books = []; render();
+        openLib("הקוד הזה לא שייך לאף ספרייה. בדקו שהעתקתם אותו במלואו."); return;
+      }
+      if (key !== saved) subscribe();
+      store.ensureImgLib();
+    },
+    /* Full-size photos live apart from the book list, so opening the site downloads only small thumbnails. */
+    imgCache: new Map(),
+    imgCol() { return store.fs.collection("libraries/" + store.lib + "img/books"); },
+    async ensureImgLib() {
+      const r = store.fs.doc("libraries/" + store.lib + "img");
+      try { const s = await r.get(); if (!s.exists) await r.set({ imagesFor: store.lib, createdAt: Date.now() }); } catch (e) { console.warn(e); }
+    },
+    cachedImages(b) {
+      if (!store.fs) return { cover: b.cover || "", backCover: b.backCover || "" };
+      return store.imgCache.get(b.id) || null;
+    },
+    async getImages(b) {
+      const inline = { cover: (b.cover || "").startsWith("data:") ? b.cover : "", backCover: b.backCover || "" };
+      if (!store.fs) return inline;
+      if (store.imgCache.has(b.id)) return store.imgCache.get(b.id);
+      let out = inline;
+      try {
+        const s = await store.imgCol().doc(b.id).get();
+        if (s.exists) { const d = s.data(); out = { cover: d.cover || inline.cover, backCover: d.backCover || inline.backCover }; }
+      } catch (e) { console.warn(e); }
+      store.imgCache.set(b.id, out);
+      return out;
+    },
+    async putImages(id, imgs) {
+      if (!store.fs) return;
+      await store.imgCol().doc(id).set({ cover: imgs.cover || "", backCover: imgs.backCover || "" });
+      store.imgCache.set(id, imgs);
     },
     async createLibrary() {
       const a = new Uint8Array(15); crypto.getRandomValues(a);
@@ -764,7 +805,7 @@ textarea.note-in {
       return store.update(id, { reviews: { [member]: entry } });
     },
     async remove(id) {
-      if (store.fs) return store.col().doc(id).delete();
+      if (store.fs) { store.imgCol().doc(id).delete().catch(() => {}); return store.col().doc(id).delete(); }
       if (store.db) return store.db.doc("books/" + id).delete();
       store.books = store.books.filter(x => x.id !== id); store.persistLocal();
     },
@@ -964,6 +1005,16 @@ textarea.note-in {
   }
   function renderBookCard() {
     const b = store.books.find(x => x.id === openId);
+    let im = b ? store.cachedImages(b) : null;
+    if (b && !im) {
+      store.getImages(b).then(() => {
+        if (openId !== b.id) return;
+        const n = $("#my-note"); if (draft && n) draft.note = n.value;
+        renderBookCard();
+      });
+    }
+    const backSrc = (im && im.backCover) || (b && b.backCover) || "";
+    const hasBack = !!(b && (b.hasBack || b.backCover));
     const sheet = $("#book-sheet");
     if (!b) { $("#book-dlg").close(); return; }
     const author0 = (b.authors || [])[0] || b.title || "";
@@ -1029,8 +1080,9 @@ textarea.note-in {
         <div class="callno"><span class="mono">${esc(callNo)}</span><span class="mono">ISBN ${esc(prettyIsbn(b.isbn) || "—")}</span></div>
         <div class="card-body">
           <div class="covers">
-            ${b.cover ? `<button type="button" class="cover zoomable" data-zoom="front" aria-label="הכריכה הקדמית בגודל מלא">${coverHtml(b)}${b.backCover ? `<span class="face-label">קדמית</span>` : ""}</button>` : `<div class="cover">${coverHtml(b)}</div>`}
-            ${b.backCover ? `<button type="button" class="cover zoomable" data-zoom="back" aria-label="הכריכה האחורית בגודל מלא"><img src="${esc(b.backCover)}" alt=""><span class="face-label">אחורית</span></button>` : ""}
+            ${b.cover ? `<button type="button" class="cover zoomable" data-zoom="front" aria-label="הכריכה הקדמית בגודל מלא">${coverHtml({ ...b, cover: (im && im.cover) || b.cover })}${hasBack ? `<span class="face-label">קדמית</span>` : ""}</button>` : `<div class="cover">${coverHtml(b)}</div>`}
+            ${backSrc ? `<button type="button" class="cover zoomable" data-zoom="back" aria-label="הכריכה האחורית בגודל מלא"><img src="${esc(backSrc)}" alt=""><span class="face-label">אחורית</span></button>`
+              : hasBack ? `<div class="cover back-empty">טוענים את הכריכה האחורית…</div>` : ""}
           </div>
           <div style="min-width:0">
             <h2>${esc(b.title)}</h2>
@@ -1360,6 +1412,22 @@ Use the title and names as printed on the book (Hebrew script for Hebrew books).
     if (fromScan === true) $("#save-btn").focus();
   }
 
+  // Shelf thumbnail kept in the book record (a few KB); the full photo is stored separately.
+  function makeThumb(src) {
+    return new Promise(res => {
+      const i = new Image();
+      i.onload = () => {
+        const sc = Math.min(1, 360 / i.naturalHeight, 240 / i.naturalWidth);
+        const c = document.createElement("canvas");
+        c.width = Math.round(i.naturalWidth * sc); c.height = Math.round(i.naturalHeight * sc);
+        c.getContext("2d").drawImage(i, 0, 0, c.width, c.height);
+        res(c.toDataURL("image/jpeg", 0.72));
+      };
+      i.onerror = () => res(src);
+      i.src = src;
+    });
+  }
+
   /* Photos: shrink to a small JPEG so it fits in the shared catalogue */
   function shrink(file, maxH = 600, maxW = 420, q = 0.78) {
     return new Promise((res, rej) => {
@@ -1418,9 +1486,17 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     if (formOlChecked) fields.olChecked = formOlChecked;
     const btn = $("#save-btn"); btn.disabled = true;
     try {
+      const id = editingId || newId();
+      if (store.fs) {
+        const imgs = { cover: formCover.startsWith("data:") ? formCover : "", backCover: formBack };
+        await store.putImages(id, imgs);
+        fields.cover = imgs.cover ? await makeThumb(imgs.cover) : formCover;
+        fields.hasBack = !!formBack;
+        if (editingId) fields.backCover = firebase.firestore.FieldValue.delete(); else delete fields.backCover;
+      }
       if (editingId) { await store.update(editingId, fields); toast("הכרטיס עודכן"); }
       else {
-        const book = { id: newId(), ...fields, reviews: {}, addedAt: Date.now(), addedBy: me || "" };
+        const book = { id, ...fields, reviews: {}, addedAt: Date.now(), addedBy: me || "" };
         await store.add(book); toast(`"${title}" נכנס לקטלוג`);
         if (ev.submitter && ev.submitter.id === "save-next") { openForm(null, true); openScanner(); return; }
         $("#form-dlg").close(); openBook(book.id); return;
@@ -1428,6 +1504,11 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
       $("#form-dlg").close();
     } catch (e) { setStatus(dbErr(e), "err"); }
     finally { btn.disabled = false; }
+  }
+
+  async function withImages(b) {
+    const im = await store.getImages(b);
+    return { ...b, cover: im.cover || b.cover, backCover: im.backCover || b.backCover || "" };
   }
 
   /* ---------------- Already in the catalogue ---------------- */
@@ -1440,9 +1521,9 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     $("#dup-dlg").showModal();
   }
   function resetNewForm() { F("isbn").value = ""; setStatus(""); }
-  $("#dup-update").addEventListener("click", () => {
+  $("#dup-update").addEventListener("click", async () => {
     const b = dupBook; $("#dup-dlg").close();
-    openForm(b, true);
+    openForm(await withImages(b), true);
     lookup().then(() => { if ($("#lookup-status").classList.contains("ok")) setStatus("הפרטים עודכנו מהמאגרים. עוברים עליהם ושומרים.", "ok"); });
   });
   $("#dup-copy").addEventListener("click", async () => {
@@ -1647,7 +1728,8 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     }
     if (t.dataset.zoom) {
       const b = store.books.find(x => x.id === openId); if (!b) return;
-      $("#zoom-img").src = t.dataset.zoom === "back" ? b.backCover : b.cover;
+      const im = store.cachedImages(b) || {};
+      $("#zoom-img").src = t.dataset.zoom === "back" ? (im.backCover || b.backCover) : (im.cover || b.cover);
       $("#zoom-dlg").showModal(); return;
     }
     if (t.dataset.status) { draft.note = $("#my-note").value; draft.status = t.dataset.status; renderBookCard(); return; }
@@ -1666,7 +1748,7 @@ Keep Hebrew text in Hebrew script exactly as printed. If you cannot read a field
     else if (act === "pick-me") openWho();
     else if (act === "lib") openLib();
     else if (act === "author-books") { const b = store.books.find(x => x.id === openId); $("#book-dlg").close(); openAuthor(b.authors[0]); }
-    else if (act === "edit") { const b = store.books.find(x => x.id === openId); $("#book-dlg").close(); openForm(b); }
+    else if (act === "edit") { const b = store.books.find(x => x.id === openId); $("#book-dlg").close(); openForm(await withImages(b)); }
     else if (act === "delete") {
       const b = store.books.find(x => x.id === openId); if (!b) return;
       $("#book-dlg").close();
