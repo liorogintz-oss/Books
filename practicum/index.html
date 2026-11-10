@@ -83,6 +83,22 @@ button.danger{color:var(--danger)}
   .sheet .sig span{border-bottom:1px solid #000;display:inline-block;min-width:55mm;padding:0 2mm}
   .sheet .refq{margin-top:7mm;font-size:10.5pt;font-weight:700}
   .sheet .ref{margin-top:2mm;font-size:11pt;white-space:pre-wrap;min-height:40mm}
+  .report{font-family:Arial,sans-serif;color:#000;font-size:10pt}
+  .report h1{text-align:center;font-size:16pt;margin:0 0 1mm}
+  .report .sub{text-align:center;font-size:11pt;margin:0 0 5mm}
+  .report h2{font-size:12.5pt;margin:7mm 0 2mm;border-bottom:1.5px solid #000;padding-bottom:1mm;page-break-after:avoid}
+  .report .info{display:grid;grid-template-columns:1fr 1fr;gap:1mm 8mm;font-size:10.5pt}
+  .report table{width:100%;border-collapse:collapse}
+  .report th,.report td{border:1px solid #000;padding:1.2mm 1.5mm;vertical-align:top;text-align:right}
+  .report th{background:#eee}
+  .report tr{page-break-inside:avoid}
+  .report tr.newday td{border-top:2px solid #000}
+  .report .sum td:first-child{width:55%}
+  .report .refl{page-break-inside:avoid;margin-bottom:4mm}
+  .report .refl b{display:block}
+  .report .refl div{white-space:pre-wrap}
+  .report .ph{page-break-inside:avoid;margin-bottom:5mm}
+  .report .ph img{max-width:100%;max-height:215mm;border:1px solid #999}
 }
 </style>
 </head>
@@ -130,9 +146,21 @@ button.danger{color:var(--danger)}
     </div>
 
     <div class="card">
-      <h2>גיבוי והדפסה</h2>
+      <h2>הדפסה</h2>
+      <div class="row">
+        <div><label>תקופה</label><select id="rangeSel"></select></div>
+      </div>
+      <div class="check"><input type="checkbox" id="withPhotos" checked><label for="withPhotos" style="margin:0;color:var(--ink)">לצרף לדוח המסכם את צילומי הטפסים</label></div>
+      <div class="toolbar" style="margin-top:10px">
+        <button class="primary" id="printReport">דוח מסכם</button>
+        <button id="printAll">טפסים יומיים</button>
+      </div>
+      <p class="muted">הדוח המסכם כולל את פרטי ההתנסות, סיכום ומאזן שעות, טבלת כל השיעורים, הרפלקציות וצילומי הטפסים. "טפסים יומיים" מדפיס טופס לכל יום, כמו הטופס של המכללה.</p>
+    </div>
+
+    <div class="card">
+      <h2>גיבוי</h2>
       <div class="toolbar">
-        <button id="printAll">הדפסת כל הדוחות</button>
         <button id="csv">ייצוא לאקסל (CSV)</button>
         <button id="exp">שמירת גיבוי</button>
         <button id="imp">שחזור מגיבוי</button>
@@ -393,6 +421,7 @@ button.danger{color:var(--danger)}
         '<span style="color:var(--ink);font-size:14px">'+(gap>0?'בזכות: '+gap+' שעות מעבר לנדרש':gap===0?'בדיוק לפי הנדרש':'בחובה: '+(-gap)+' שעות. אפשר להשלים בשבועות הבאים')+'</span></div>';
     }
     $('stats').innerHTML=h;
+    fillRanges();
 
     var L=sorted();
     $('list').innerHTML=L.length?L.map(function(d){
@@ -592,7 +621,69 @@ button.danger{color:var(--danger)}
     $('print').innerHTML=list.map(sheet).join('');window.print();
   }
   $('printBtn').addEventListener('click',function(){printDays([cur])});
-  $('printAll').addEventListener('click',function(){printDays(sorted().reverse())});
+  $('printAll').addEventListener('click',function(){printDays(inRange())});
+
+  /* ---------- Summary report (by month or everything) ---------- */
+  var MONTHS=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  function monthName(ym){return MONTHS[+ym.slice(5)-1]+' '+ym.slice(0,4)}
+  function fillRanges(){
+    var el=$('rangeSel'),v=el.value,ms={};
+    state.days.forEach(function(d){if(d.date)ms[d.date.slice(0,7)]=1});
+    el.innerHTML='<option value="">כל התקופה</option>'+Object.keys(ms).sort().reverse().map(function(m){return '<option value="'+m+'">'+monthName(m)+'</option>'}).join('');
+    if(v&&ms[v])el.value=v;
+  }
+  function inRange(){var m=$('rangeSel').value;return sorted().reverse().filter(function(d){return !m||(d.date||'').slice(0,7)===m})}
+  function report(list,photos){
+    var p=state.profile,m=$('rangeSel').value,weekly=+p.weekly||6,t=today();
+    var n={},total=0,signed=0,refl=0;TYPES.forEach(function(x){n[x]=0});
+    list.forEach(function(d){var ls=usedLessons(d);total+=ls.length;ls.forEach(function(l){if(l.type)n[l.type]++});if(d.signed)signed++;if((d.reflection||'').trim())refl++});
+    var past=list.filter(function(d){return !d.date||d.date<=t}),need=past.length*weekly,done=0;
+    past.forEach(function(d){done+=usedLessons(d).length});
+    var gap=done-need;
+    var row=function(a,b){return '<tr><td>'+a+'</td><td>'+b+'</td></tr>'};
+    var info=[['שם הסטודנט/ית',p.student],['כיתת האימונים וביה"ס',p.school],['המורה המאמנת',p.mentor],['המדריכה הפדגוגית',p.instructor]]
+      .map(function(x){return '<div>'+x[0]+': <b>'+esc(x[1]||'')+'</b></div>'}).join('');
+    var range=list.length?'מ־'+ltr(fmt(list[0].date))+' עד '+ltr(fmt(list[list.length-1].date)):'';
+    var lessons=list.map(function(d){
+      var ls=ordered(d).filter(used);
+      if(!ls.length)return '<tr class="newday"><td>'+fmt(d.date)+'</td><td colspan="6">לא פורטו שיעורים</td><td>'+(d.signed?'✓':'')+'</td></tr>';
+      return ls.map(function(l,i){
+        return '<tr'+(i===0?' class="newday"':'')+'><td>'+(i===0?fmt(d.date):'')+'</td><td>'+esc(periodText(l))+'</td><td>'+esc(l.cls)+'</td><td>'+esc(l.room||'')+'</td><td>'+esc(l.type)+'</td><td>'+esc(l.topic)+'</td><td>'+esc(l.notes)+'</td><td>'+(i===0&&d.signed?'✓':'')+'</td></tr>';
+      }).join('');
+    }).join('');
+    var refls=list.filter(function(d){return (d.reflection||'').trim()}).map(function(d){
+      return '<div class="refl"><b>'+fmt(d.date)+'</b><div>'+esc(d.reflection.trim())+'</div></div>'}).join('')||'<p>אין רפלקציות בתקופה הזו.</p>';
+    var phs=photos.filter(function(x){return x.img}).map(function(x){
+      return '<div class="ph"><b>'+fmt(x.d.date)+'</b><br><img src="'+x.img+'" alt=""></div>'}).join('');
+    return '<div class="report">'+
+      '<h1>דוח מסכם – התנסות בהוראה</h1>'+
+      '<p class="sub">'+(m?monthName(m):'כל התקופה')+(range?' · '+range:'')+(p.year?' · '+esc(p.year):'')+(p.college?' · '+esc(p.college):'')+'</p>'+
+      '<div class="info">'+info+'</div>'+
+      '<h2>סיכום</h2><table class="sum"><tbody>'+
+        row('ימי התנסות',list.length)+row('שיעורים',total)+
+        TYPES.filter(function(x){return n[x]}).map(function(x){return row('— '+x,n[x])}).join('')+
+        row('שעות שבוצעו מול הנדרש ('+past.length+' ימים × '+weekly+')',done+' מתוך '+need)+
+        row('מאזן',gap>0?'בזכות '+gap+' שעות':gap===0?'בדיוק לפי הנדרש':'בחובה '+(-gap)+' שעות')+
+        row('ימים עם חתימת המורה המאמנת',signed+' מתוך '+list.length)+
+        row('ימים עם רפלקציה',refl+' מתוך '+list.length)+
+      '</tbody></table>'+
+      '<h2>פירוט השיעורים</h2><table><thead><tr><th>תאריך</th><th>שעה</th><th>כיתה</th><th>מיקום</th><th>סוג הפעילות</th><th>המקצוע ונושא השיעור</th><th>הערות</th><th>חתום</th></tr></thead><tbody>'+lessons+'</tbody></table>'+
+      '<h2>רפלקציות</h2>'+refls+
+      (phs?'<h2>צילומי הטפסים</h2>'+phs:'')+
+    '</div>';
+  }
+  $('printReport').addEventListener('click',function(){
+    var list=inRange();if(!list.length){alert('אין ימים בתקופה הזו');return}
+    var b=this,want=$('withPhotos').checked;b.disabled=true;b.textContent='מכין…';
+    Promise.all(list.filter(function(d){return want&&d.hasPhoto}).map(function(d){return getPhoto(d).then(function(img){return {d:d,img:img}})}))
+      .then(function(ph){
+        $('print').innerHTML=report(list,ph);
+        // Give the photos a moment to load before the print dialog opens
+        var imgs=[].slice.call($('print').querySelectorAll('img'));
+        return Promise.all(imgs.map(function(i){return i.complete?0:new Promise(function(r){i.onload=i.onerror=r})}));
+      })
+      .then(function(){b.disabled=false;b.textContent='דוח מסכם';window.print()});
+  });
 
   /* ---------- Export / import ---------- */
   function download(name,text,type){
