@@ -121,10 +121,10 @@ button.danger{color:var(--danger)}
         <div><label>שנה</label><input data-p="year" placeholder='תשפ"ז'></div>
         <div><label>מוסד</label><input data-p="college" placeholder="שם המכללה"></div>
       </div>
-      <label>שם הסטודנט/ית</label><input data-p="student">
-      <label>כיתת האימונים וביה"ס</label><input data-p="school">
-      <label>המורה המאמנת</label><input data-p="mentor">
-      <label>המדריכה הפדגוגית</label><input data-p="instructor">
+      <label>שם הסטודנט/ית</label><select data-p="student"></select>
+      <label>כיתת האימונים וביה"ס</label><select data-p="school"></select>
+      <label>המורה המאמנת</label><select data-p="mentor"></select>
+      <label>המדריכה הפדגוגית</label><select data-p="instructor"></select>
       <label>יעד ימי התנסות (לא חובה)</label><input data-p="goal" type="number" min="0" inputmode="numeric">
     </div>
 
@@ -370,11 +370,43 @@ button.danger{color:var(--danger)}
       return '<div class="day" data-id="'+d.id+'"><span class="d">'+fmt(d.date)+'</span><span class="s">'+ls.length+' שיעורים · '+esc(sum)+'</span>'+pills+'</div>';
     }).join(''):'<div class="empty">עוד אין ימים. לחצי על "יום חדש".</div>';
 
-    document.querySelectorAll('[data-p]').forEach(function(el){if(el!==document.activeElement)el.value=state.profile[el.dataset.p]||''});
+    document.querySelectorAll('[data-p]').forEach(function(el){
+      if(el.tagName==='SELECT')fillChoice(el);
+      else if(el!==document.activeElement)el.value=state.profile[el.dataset.p]||'';
+    });
+  }
+  /* Dropdowns for the people and school: the usual names first, plus any the user added */
+  var CHOICES={student:['קרן אוגינץ'],school:['ריאלי- בית בירם'],mentor:['הדסה ארנברג'],instructor:['ליאת מנדלבאום']};
+  var ADD='__add__';
+  function choiceList(k){
+    var list=CHOICES[k].slice(),extra=(state.profile.options||{})[k]||[],v=state.profile[k];
+    extra.forEach(function(x){if(list.indexOf(x)<0)list.push(x)});
+    if(v&&list.indexOf(v)<0)list.push(v);
+    return list;
+  }
+  function fillChoice(el){
+    var k=el.dataset.p,list=choiceList(k);
+    if(!state.profile[k])state.profile[k]=list[0];
+    el.innerHTML=list.map(function(v){return '<option'+(v===state.profile[k]?' selected':'')+'>'+esc(v)+'</option>'}).join('')+
+      '<option value="'+ADD+'">➕ אפשרות אחרת…</option>';
   }
   $('list').addEventListener('click',function(e){var r=e.target.closest('.day');if(r)openDay(r.dataset.id)});
   document.querySelectorAll('[data-p]').forEach(function(el){
-    el.addEventListener('input',function(){state.profile[el.dataset.p]=el.value;saveProfile();if(el.dataset.p==='goal')renderHome()});
+    var k=el.dataset.p;
+    if(el.tagName==='SELECT'){
+      el.addEventListener('change',function(){
+        var v=el.value;
+        if(v===ADD){
+          v=(prompt('שם חדש:')||'').trim();
+          if(!v){fillChoice(el);return}
+          var o=state.profile.options=state.profile.options||{};
+          o[k]=o[k]||[];if(o[k].indexOf(v)<0&&CHOICES[k].indexOf(v)<0)o[k].push(v);
+        }
+        state.profile[k]=v;saveProfile();fillChoice(el);
+      });
+      return;
+    }
+    el.addEventListener('input',function(){state.profile[k]=el.value;saveProfile();if(k==='goal')renderHome()});
   });
 
   /* ---------- Day ---------- */
