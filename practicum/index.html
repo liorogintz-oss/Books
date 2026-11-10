@@ -333,8 +333,8 @@ button.danger{color:var(--danger)}
 
   /* ---------- Helpers ---------- */
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-  function blankLesson(){return {time:'',cls:'',type:'',topic:'',notes:''}}
-  function used(l){return l.time||l.cls||l.type||l.topic||l.notes}
+  function blankLesson(){return {time:'',cls:'',room:'',type:'',topic:'',notes:''}}
+  function used(l){return l.time||l.cls||l.room||l.type||l.topic||l.notes}
   function usedLessons(d){return (d.lessons||[]).filter(used)}
   function fmt(iso){if(!iso)return 'ללא תאריך';var p=iso.split('-');return +p[2]+'/'+ +p[1]+'/'+p[0].slice(2)}
   function today(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
@@ -448,7 +448,7 @@ button.danger{color:var(--danger)}
     if(w)w.document.write('<title>צילום הטופס</title><body style="margin:0;background:#111"><img src="'+e.target.src+'" style="width:100%">');
   });
 
-  function lessonSummary(l){return [l.time,l.cls,l.type,l.topic].filter(Boolean).join(' · ')}
+  function lessonSummary(l){return [l.time,l.cls,l.room&&'חדר '+l.room,l.type,l.topic].filter(Boolean).join(' · ')}
   function renderLessons(){
     var firstEmpty=cur.lessons.findIndex(function(l){return !used(l)});
     $('lessons').innerHTML=cur.lessons.map(function(l,i){
@@ -459,7 +459,8 @@ button.danger{color:var(--danger)}
         (open?'':'<button class="link" data-open>הוספה</button>')+'</div>'+
         '<div class="body"'+(open?'':' hidden')+'>'+
           '<div class="row"><div><label>שעה</label><input type="time" data-f="time" value="'+esc(l.time)+'"></div>'+
-          '<div><label>הכיתה</label><input data-f="cls" value="'+esc(l.cls)+'" placeholder="למשל י&quot;ב 321"></div></div>'+
+          '<div><label>הכיתה</label><input data-f="cls" value="'+esc(l.cls)+'" placeholder="למשל י&quot;ב"></div></div>'+
+          '<label>מיקום (חדר / אולם)</label><input data-f="room" value="'+esc(l.room)+'" placeholder="למשל 321 או אולם ספורט">'+
           '<label>סוג הפעילות</label><select data-f="type">'+opts+'</select>'+
           '<label>המקצוע ונושא השיעור</label><input data-f="topic" value="'+esc(l.topic)+'">'+
           '<label>הערות</label><input data-f="notes" value="'+esc(l.notes)+'">'+
@@ -508,7 +509,7 @@ button.danger{color:var(--danger)}
     var p=state.profile;
     var rows=d.lessons.slice(0,ROWS).map(function(l,i){
       var n=(i+1)+(l.time?'<br>'+esc(l.time):'');
-      return '<tr><td>'+(i===0?esc(fmt(d.date)):'')+'</td><td style="text-align:center">'+n+'</td><td>'+esc(l.cls)+'</td><td>'+esc(l.type)+'</td><td>'+esc(l.topic)+'</td><td>'+esc(l.notes)+'</td></tr>';
+      return '<tr><td>'+(i===0?esc(fmt(d.date)):'')+'</td><td style="text-align:center">'+n+'</td><td>'+esc(l.cls)+(l.room?'<br>חדר/אולם: '+esc(l.room):'')+'</td><td>'+esc(l.type)+'</td><td>'+esc(l.topic)+'</td><td>'+esc(l.notes)+'</td></tr>';
     }).join('');
     return '<div class="sheet">'+
       (p.college?'<p class="t1">'+esc(p.college)+'</p>':'')+
@@ -553,11 +554,11 @@ button.danger{color:var(--danger)}
   });
   $('csv').addEventListener('click',function(){
     var q=function(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
-    var out=[['תאריך','שיעור מספר','שעה','הכיתה','סוג הפעילות','המקצוע ונושא השיעור','הערות','חתום','רפלקציה']];
+    var out=[['תאריך','שיעור מספר','שעה','הכיתה','מיקום','סוג הפעילות','המקצוע ונושא השיעור','הערות','חתום','רפלקציה']];
     sorted().reverse().forEach(function(d){
       var ls=usedLessons(d);
-      if(!ls.length)out.push([fmt(d.date),'','','','','','',d.signed?'כן':'לא',d.reflection]);
-      d.lessons.forEach(function(l,i){if(used(l))out.push([fmt(d.date),i+1,l.time,l.cls,l.type,l.topic,l.notes,d.signed?'כן':'לא',l===ls[0]?d.reflection:''])});
+      if(!ls.length)out.push([fmt(d.date),'','','','','','','',d.signed?'כן':'לא',d.reflection]);
+      d.lessons.forEach(function(l,i){if(used(l))out.push([fmt(d.date),i+1,l.time,l.cls,l.room||'',l.type,l.topic,l.notes,d.signed?'כן':'לא',l===ls[0]?d.reflection:''])});
     });
     download('practicum-'+today()+'.csv','﻿'+out.map(function(r){return r.map(q).join(',')}).join('\n'),'text/csv');
   });
