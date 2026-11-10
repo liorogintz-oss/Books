@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>יומן התנסות בהוראה</title>
+<style>
+:root{
+  --bg:#f6f5f2;--card:#fff;--ink:#1f2328;--muted:#6b7078;--line:#e2e0da;
+  --accent:#2f5d8a;--accent-soft:#e6eef6;--ok:#2e7d4f;--ok-soft:#e3f2e8;--warn:#a8650a;--warn-soft:#fbf0dc;--danger:#b3261e;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#16181b;--card:#1f2226;--ink:#e8e6e1;--muted:#9a9ea5;--line:#33373d;
+  --accent:#7fb0e0;--accent-soft:#22313f;--ok:#6cc391;--ok-soft:#1d3226;--warn:#e0a54a;--warn-soft:#3a2d17;--danger:#ef7a70;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+[hidden]{display:none!important}
+header.top{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:10px}
+header.top h1{font-size:18px;margin:0;flex:1}
+main{max-width:760px;margin:0 auto;padding:16px 16px 96px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.card h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:600}
+label{display:block;font-size:13px;color:var(--muted);margin:8px 0 3px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea{min-height:90px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:8px 12px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button.primary{color:#10151a}}
+button.link{border:0;background:none;color:var(--accent);padding:4px 6px}
+button.danger{color:var(--danger)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1 1 140px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}
+.stat{background:var(--bg);border-radius:10px;padding:10px;text-align:center}
+.stat b{display:block;font-size:22px}
+.stat span{font-size:12px;color:var(--muted)}
+.day{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
+.day:first-of-type{border-top:0}
+.day .d{min-width:78px;font-weight:600}
+.day .s{flex:1;font-size:14px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{font-size:12px;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.lesson{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+.lesson .lh{display:flex;align-items:center;gap:8px;font-weight:600}
+.lesson .lh .n{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:14px}
+.lesson .lh .sum{flex:1;font-weight:400;color:var(--muted);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.check{display:flex;align-items:center;gap:8px;margin-top:6px}
+.check input{width:auto}
+.fab{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);box-shadow:0 4px 14px rgba(0,0,0,.18);padding:12px 22px;border-radius:99px}
+.empty{color:var(--muted);text-align:center;padding:18px 0}
+.muted{color:var(--muted);font-size:13px}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Printed form, laid out like the paper report */
+#print{display:none}
+@media print{
+  @page{size:A4;margin:14mm}
+  body{background:#fff;color:#000}
+  header.top,main,.fab{display:none!important}
+  #print{display:block}
+  .sheet{page-break-after:always;font-family:Arial,sans-serif;color:#000}
+  .sheet:last-child{page-break-after:auto}
+  .sheet .t1{text-align:center;font-size:13pt;margin:0}
+  .sheet .t2{text-align:center;font-size:16pt;font-weight:700;margin:2mm 0 6mm}
+  .sheet .fld{font-size:11pt;margin:1.5mm 0}
+  .sheet .fld b{font-weight:400}
+  .sheet .fld span{border-bottom:1px solid #000;display:inline-block;min-width:60mm;padding:0 2mm}
+  .sheet table{width:100%;border-collapse:collapse;margin-top:5mm;font-size:10pt}
+  .sheet th,.sheet td{border:1px solid #000;padding:1.5mm;vertical-align:top}
+  .sheet th{font-weight:700;background:#f0f0f0}
+  .sheet td{height:13mm}
+  .sheet .sig{margin-top:7mm;font-size:11pt}
+  .sheet .sig span{border-bottom:1px solid #000;display:inline-block;min-width:55mm;padding:0 2mm}
+  .sheet .refq{margin-top:7mm;font-size:10.5pt;font-weight:700}
+  .sheet .ref{margin-top:2mm;font-size:11pt;white-space:pre-wrap;min-height:40mm}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <button class="link" id="back" hidden aria-label="חזרה">→ חזרה</button>
+  <h1 id="title">יומן התנסות בהוראה</h1>
+  <button class="link" id="printBtn" hidden>הדפסה</button>
+</header>
+
+<main>
+  <!-- Home -->
+  <section id="home">
+    <div class="card">
+      <h2>סיכום</h2>
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="card">
+      <h2>ימי התנסות</h2>
+      <div id="list"></div>
+    </div>
+
+    <div class="card">
+      <h2>פרטי ההתנסות</h2>
+      <div class="row">
+        <div><label>שנה</label><input data-p="year" placeholder='תשפ"ז'></div>
+        <div><label>מוסד</label><input data-p="college" placeholder="שם המכללה"></div>
+      </div>
+      <label>שם הסטודנט/ית</label><input data-p="student">
+      <label>כיתת האימונים וביה"ס</label><input data-p="school">
+      <label>המורה המאמנת</label><input data-p="mentor">
+      <label>המדריכה הפדגוגית</label><input data-p="instructor">
+      <label>יעד ימי התנסות (לא חובה)</label><input data-p="goal" type="number" min="0" inputmode="numeric">
+    </div>
+
+    <div class="card">
+      <h2>גיבוי והדפסה</h2>
+      <div class="toolbar">
+        <button id="printAll">הדפסת כל הדוחות</button>
+        <button id="csv">ייצוא לאקסל (CSV)</button>
+        <button id="exp">שמירת גיבוי</button>
+        <button id="imp">שחזור מגיבוי</button>
+        <input type="file" id="impFile" accept=".json,application/json" hidden>
+      </div>
+      <p class="muted">הנתונים נשמרים בדפדפן הזה בלבד. כדאי לשמור גיבוי מדי פעם, ולהשתמש בו כדי להעביר את היומן למכשיר אחר.</p>
+    </div>
+  </section>
+
+  <!-- Day editor -->
+  <section id="dayView" hidden>
+    <div class="card">
+      <label>תאריך</label>
+      <input type="date" id="dDate">
+    </div>
+    <div id="lessons"></div>
+    <div class="card">
+      <h2>חתימת המורה המאמנת</h2>
+      <div class="check"><input type="checkbox" id="dSigned"><label for="dSigned" style="margin:0;color:var(--ink)">המורה המאמנת חתמה על הדו"ח</label></div>
+    </div>
+    <div class="card">
+      <h2>רפלקציה</h2>
+      <p class="muted" style="margin-top:0">תובנה / דבר חדש שלמדתי היום על עצמי, מקרא, בית הספר / דבר אחד שאאמץ לעבודתי כמורה או להתנסות / דבר אחד לא אחזור עליו בהתנסות.</p>
+      <textarea id="dRef" rows="6"></textarea>
+    </div>
+    <div class="toolbar">
+      <button class="danger" id="delDay">מחיקת היום</button>
+    </div>
+  </section>
+</main>
+
+<button class="primary fab" id="newDay">+ יום חדש</button>
+<div id="print"></div>
+
+<script>
+(function(){
+  var KEY='practicum-log-v1', ROWS=6;
+  var TYPES=['התנסות','צפייה','שיעור פרטני','אחר'];
+  var state=load(), cur=null;
+  var $=function(id){return document.getElementById(id)};
+
+  function load(){
+    try{var s=JSON.parse(localStorage.getItem(KEY));if(s&&s.days)return s}catch(e){}
+    return {profile:{year:'תשפ"ז'},days:[]};
+  }
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){alert('השמירה בדפדפן נכשלה. כדאי לשמור גיבוי.')}}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function blankLesson(){return {time:'',cls:'',type:'',topic:'',notes:''}}
+  function used(l){return l.time||l.cls||l.type||l.topic||l.notes}
+  function usedLessons(d){return d.lessons.filter(used)}
+  function fmt(iso){if(!iso)return 'ללא תאריך';var p=iso.split('-');return +p[2]+'/'+ +p[1]+'/'+p[0].slice(2)}
+  function today(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+  function sorted(){return state.days.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'')})}
+
+  /* ---------- Home ---------- */
+  function renderHome(){
+    var days=state.days, n={}, total=0, unsigned=0, noRef=0;
+    TYPES.forEach(function(t){n[t]=0});
+    days.forEach(function(d){
+      usedLessons(d).forEach(function(l){total++; if(l.type)n[l.type]=(n[l.type]||0)+1});
+      if(!d.signed)unsigned++; if(!(d.reflection||'').trim())noRef++;
+    });
+    var goal=+state.profile.goal||0;
+    var s=[[days.length+(goal?' / '+goal:''),'ימי התנסות'],[total,'שיעורים'],[n['התנסות'],'התנסות'],[n['צפייה'],'צפייה'],[n['שיעור פרטני'],'שיעור פרטני']];
+    var h=s.map(function(x){return '<div class="stat"><b>'+x[0]+'</b><span>'+x[1]+'</span></div>'}).join('');
+    if(unsigned)h+='<div class="stat" style="background:var(--warn-soft)"><b style="color:var(--warn)">'+unsigned+'</b><span>חסרה חתימה</span></div>';
+    if(noRef)h+='<div class="stat" style="background:var(--warn-soft)"><b style="color:var(--warn)">'+noRef+'</b><span>חסרה רפלקציה</span></div>';
+    $('stats').innerHTML=h;
+
+    var L=sorted();
+    $('list').innerHTML=L.length?L.map(function(d){
+      var ls=usedLessons(d);
+      var sum=ls.map(function(l){return [l.type,l.topic].filter(Boolean).join(' – ')}).filter(Boolean).join(' · ')||'אין שיעורים';
+      var pills=(d.signed?'<span class="pill ok">חתום</span>':'<span class="pill warn">לא חתום</span>')+
+        ((d.reflection||'').trim()?'':' <span class="pill warn">רפלקציה</span>');
+      return '<div class="day" data-id="'+d.id+'"><span class="d">'+fmt(d.date)+'</span><span class="s">'+ls.length+' שיעורים · '+esc(sum)+'</span>'+pills+'</div>';
+    }).join(''):'<div class="empty">עוד אין ימים. לחצי על "יום חדש".</div>';
+
+    document.querySelectorAll('[data-p]').forEach(function(el){el.value=state.profile[el.dataset.p]||''});
+  }
+  $('list').addEventListener('click',function(e){var r=e.target.closest('.day');if(r)openDay(r.dataset.id)});
+  document.querySelectorAll('[data-p]').forEach(function(el){
+    el.addEventListener('input',function(){state.profile[el.dataset.p]=el.value;save();if(el.dataset.p==='goal')renderHome()});
+  });
+
+  /* ---------- Day ---------- */
+  function newDay(){
+    var d={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),date:today(),lessons:[],signed:false,reflection:''};
+    for(var i=0;i<ROWS;i++)d.lessons.push(blankLesson());
+    // Carry the class from the most recent day, since it rarely changes
+    var last=sorted()[0];
+    if(last){var lc=usedLessons(last).map(function(l){return l.cls}).filter(Boolean)[0];if(lc)d.lessons[0].cls=lc}
+    state.days.push(d);save();openDay(d.id);
+  }
+  function openDay(id){
+    cur=state.days.filter(function(d){return d.id===id})[0];if(!cur)return;
+    $('dDate').value=cur.date||'';$('dSigned').checked=!!cur.signed;$('dRef').value=cur.reflection||'';
+    renderLessons();show('day');
+  }
+  function lessonSummary(l){return [l.time,l.cls,l.type,l.topic].filter(Boolean).join(' · ')}
+  function renderLessons(){
+    var firstEmpty=cur.lessons.findIndex(function(l){return !used(l)});
+    $('lessons').innerHTML=cur.lessons.map(function(l,i){
+      var open=used(l)||i===firstEmpty;
+      var opts='<option value="">בחירה…</option>'+TYPES.map(function(t){return '<option'+(l.type===t?' selected':'')+'>'+t+'</option>'}).join('');
+      return '<div class="lesson card" data-i="'+i+'" style="padding:10px">'+
+        '<div class="lh"><span class="n">'+(i+1)+'</span><span class="sum">'+esc(lessonSummary(l)||'שיעור '+(i+1))+'</span>'+
+        (open?'':'<button class="link" data-open>הוספה</button>')+'</div>'+
+        '<div class="body"'+(open?'':' hidden')+'>'+
+          '<div class="row"><div><label>שעה</label><input type="time" data-f="time" value="'+esc(l.time)+'"></div>'+
+          '<div><label>הכיתה</label><input data-f="cls" value="'+esc(l.cls)+'" placeholder="למשל י&quot;ב 321"></div></div>'+
+          '<label>סוג הפעילות</label><select data-f="type">'+opts+'</select>'+
+          '<label>המקצוע ונושא השיעור</label><input data-f="topic" value="'+esc(l.topic)+'">'+
+          '<label>הערות</label><input data-f="notes" value="'+esc(l.notes)+'">'+
+        '</div></div>';
+    }).join('');
+  }
+  $('lessons').addEventListener('input',function(e){
+    var f=e.target.dataset.f;if(!f)return;
+    var box=e.target.closest('.lesson'),l=cur.lessons[+box.dataset.i];
+    l[f]=e.target.value;save();
+    box.querySelector('.sum').textContent=lessonSummary(l)||'שיעור '+(+box.dataset.i+1);
+  });
+  $('lessons').addEventListener('change',function(e){if(e.target.tagName==='SELECT')e.target.dispatchEvent(new Event('input',{bubbles:true}))});
+  $('lessons').addEventListener('click',function(e){
+    if(!e.target.hasAttribute('data-open'))return;
+    var box=e.target.closest('.lesson');box.querySelector('.body').hidden=false;e.target.remove();
+    var f=box.querySelector('input,select');if(f)f.focus();
+  });
+  $('dDate').addEventListener('input',function(){cur.date=this.value;save();$('title').textContent=fmt(cur.date)});
+  $('dSigned').addEventListener('change',function(){cur.signed=this.checked;save()});
+  $('dRef').addEventListener('input',function(){cur.reflection=this.value;save()});
+  $('delDay').addEventListener('click',function(){
+    if(!confirm('למחוק את הדו"ח של '+fmt(cur.date)+'?'))return;
+    state.days=state.days.filter(function(d){return d!==cur});save();show('home');
+  });
+
+  /* ---------- Navigation ---------- */
+  function show(v){
+    var day=v==='day';
+    $('home').hidden=day;$('dayView').hidden=!day;$('back').hidden=!day;$('printBtn').hidden=!day;$('newDay').hidden=day;
+    $('title').textContent=day?fmt(cur.date):'יומן התנסות בהוראה';
+    if(!day){
+      cur=null;renderHome();
+    }
+    window.scrollTo(0,0);
+  }
+  $('back').addEventListener('click',function(){show('home')});
+  $('newDay').addEventListener('click',newDay);
+
+  /* ---------- Print (paper form layout) ---------- */
+  function sheet(d){
+    var p=state.profile;
+    var rows=d.lessons.map(function(l,i){
+      var n=(i+1)+(l.time?'<br>'+esc(l.time):'');
+      return '<tr><td>'+(i===0?esc(fmt(d.date)):'')+'</td><td style="text-align:center">'+n+'</td><td>'+esc(l.cls)+'</td><td>'+esc(l.type)+'</td><td>'+esc(l.topic)+'</td><td>'+esc(l.notes)+'</td></tr>';
+    }).join('');
+    return '<div class="sheet">'+
+      (p.college?'<p class="t1">'+esc(p.college)+'</p>':'')+
+      '<p class="t1">'+esc(p.year||'')+'</p>'+
+      '<p class="t2">דו"ח יומי על התנסות בהוראה</p>'+
+      '<div class="fld">שם הסטודנט/ית: <span>'+esc(p.student)+'</span></div>'+
+      '<div class="fld">כיתת האימונים וביה"ס: <span>'+esc(p.school)+'</span></div>'+
+      '<div class="fld">המורה המאמנת: <span>'+esc(p.mentor)+'</span></div>'+
+      '<div class="fld">המדריכה הפדגוגית: <span>'+esc(p.instructor)+'</span></div>'+
+      '<table><thead><tr><th style="width:13%">יום<br>תאריך</th><th style="width:9%">שיעור<br>מספר</th><th style="width:11%">הכיתה</th><th style="width:20%">סוג הפעילות<br>התנסות/צפייה</th><th style="width:24%">המקצוע ונושא<br>השיעור</th><th>הערות</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<div class="sig">חתימת המורה המאמנת: <span>&nbsp;</span></div>'+
+      '<div class="refq">תובנה/דבר חדש שלמדתי היום על עצמי/מקרא/בית הספר / דבר אחד שאאמץ לעבודתי כמורה או להתנסות/ דבר אחד לא אחזור עליו בהתנסות. פרטו במספר משפטים:</div>'+
+      '<div class="ref">'+esc(d.reflection)+'</div>'+
+    '</div>';
+  }
+  function printDays(list){
+    if(!list.length){alert('אין דוחות להדפסה');return}
+    $('print').innerHTML=list.map(sheet).join('');window.print();
+  }
+  $('printBtn').addEventListener('click',function(){printDays([cur])});
+  $('printAll').addEventListener('click',function(){printDays(sorted().reverse())});
+
+  /* ---------- Export / import ---------- */
+  function download(name,text,type){
+    var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:type}));a.download=name;
+    document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500);
+  }
+  $('exp').addEventListener('click',function(){download('practicum-backup-'+today()+'.json',JSON.stringify(state,null,2),'application/json')});
+  $('imp').addEventListener('click',function(){$('impFile').click()});
+  $('impFile').addEventListener('change',function(){
+    var f=this.files[0];if(!f)return;var r=new FileReader();
+    r.onload=function(){
+      try{var s=JSON.parse(r.result);if(!s||!Array.isArray(s.days))throw 0;
+        if(!confirm('השחזור יחליף את כל הנתונים הנוכחיים ('+state.days.length+' ימים) ב־'+s.days.length+' ימים מהגיבוי. להמשיך?'))return;
+        s.profile=s.profile||{};state=s;save();renderHome();
+      }catch(e){alert('הקובץ אינו גיבוי תקין')}
+    };r.readAsText(f);this.value='';
+  });
+  $('csv').addEventListener('click',function(){
+    var q=function(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+    var out=[['תאריך','שיעור מספר','שעה','הכיתה','סוג הפעילות','המקצוע ונושא השיעור','הערות','חתום','רפלקציה']];
+    sorted().reverse().forEach(function(d){
+      var ls=usedLessons(d);
+      if(!ls.length)out.push([fmt(d.date),'','','','','','',d.signed?'כן':'לא',d.reflection]);
+      d.lessons.forEach(function(l,i){if(used(l))out.push([fmt(d.date),i+1,l.time,l.cls,l.type,l.topic,l.notes,d.signed?'כן':'לא',l===ls[0]?d.reflection:''])});
+    });
+    download('practicum-'+today()+'.csv','﻿'+out.map(function(r){return r.map(q).join(',')}).join('\n'),'text/csv');
+  });
+
+  renderHome();
+})();
+</script>
+</body>
+</html>
