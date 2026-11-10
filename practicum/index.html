@@ -125,6 +125,7 @@ button.danger{color:var(--danger)}
       <label>כיתת האימונים וביה"ס</label><select data-p="school"></select>
       <label>המורה המאמנת</label><select data-p="mentor"></select>
       <label>המדריכה הפדגוגית</label><select data-p="instructor"></select>
+      <label>שעות נדרשות בכל יום התנסות (שבוע)</label><input data-p="weekly" type="number" min="0" inputmode="numeric" placeholder="6">
       <label>יעד ימי התנסות (לא חובה)</label><input data-p="goal" type="number" min="0" inputmode="numeric">
     </div>
 
@@ -380,6 +381,17 @@ button.danger{color:var(--danger)}
     var h=s.map(function(x){return '<div class="stat"><b>'+x[0]+'</b><span>'+x[1]+'</span></div>'}).join('');
     if(unsigned)h+='<div class="stat" style="background:var(--warn-soft)"><b style="color:var(--warn)">'+unsigned+'</b><span>חסרה חתימה</span></div>';
     if(noRef)h+='<div class="stat" style="background:var(--warn-soft)"><b style="color:var(--warn)">'+noRef+'</b><span>חסרה רפלקציה</span></div>';
+    // Hours balance: each practicum day so far requires WEEKLY lesson hours
+    var weekly=+state.profile.weekly||6,t=today(),past=days.filter(function(d){return !d.date||d.date<=t});
+    if(past.length){
+      var need=past.length*weekly,done=0;
+      past.forEach(function(d){done+=usedLessons(d).length});
+      var gap=done-need,ok=gap>=0;
+      h+='<div class="stat balance" style="grid-column:1/-1;background:var('+(ok?'--ok-soft':'--warn-soft')+')">'+
+        '<span>שעות שבוצעו מול הנדרש ('+past.length+' ימים × '+weekly+' שעות)</span>'+
+        '<b style="color:var('+(ok?'--ok':'--warn')+')">'+done+' מתוך '+need+'</b>'+
+        '<span style="color:var(--ink);font-size:14px">'+(gap>0?'בזכות: '+gap+' שעות מעבר לנדרש':gap===0?'בדיוק לפי הנדרש':'בחובה: '+(-gap)+' שעות. אפשר להשלים בשבועות הבאים')+'</span></div>';
+    }
     $('stats').innerHTML=h;
 
     var L=sorted();
@@ -427,7 +439,7 @@ button.danger{color:var(--danger)}
       });
       return;
     }
-    el.addEventListener('input',function(){state.profile[k]=el.value;saveProfile();if(k==='goal')renderHome()});
+    el.addEventListener('input',function(){state.profile[k]=el.value;saveProfile();if(k==='goal'||k==='weekly')renderHome()});
   });
 
   /* ---------- Day ---------- */
