@@ -338,8 +338,24 @@ button.danger{color:var(--danger)}
 
   /* ---------- Helpers ---------- */
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-  function blankLesson(){return {time:'',cls:'',room:'',type:'',topic:'',notes:''}}
-  function used(l){return l.time||l.cls||l.room||l.type||l.topic||l.notes}
+  function blankLesson(){return {period:'',time:'',end:'',cls:'',room:'',type:'',topic:'',notes:''}}
+  function used(l){return l.period||l.time||l.cls||l.room||l.type||l.topic||l.notes}
+  /* School timetable: period number -> start time; each period lasts 45 minutes */
+  var PERIODS=['08:00','08:45','09:45','10:30','11:30','12:15','13:30','14:15','15:00','15:45','16:30'];
+  function addMin(t,m){var x=+t.slice(0,2)*60+ +t.slice(3)+m;return ('0'+Math.floor(x/60)).slice(-2)+':'+('0'+x%60).slice(-2)}
+  function setPeriod(l,n){l.period=n||'';l.time=n?PERIODS[n-1]:'';l.end=n?addMin(PERIODS[n-1],45):''}
+  function ltr(t){return '\u2066'+t+'\u2069'}
+  function timeRange(l){return l.time?ltr(l.time+(l.end?'–'+l.end:'')):''}
+  function periodText(l){return l.period?'שעה '+l.period+' · '+timeRange(l):timeRange(l)}
+  // Days saved before periods existed: match a typed start time to its period
+  function migrate(d){(d.lessons||[]).forEach(function(l){if(!l.period&&l.time){var k=PERIODS.indexOf(l.time);if(k>-1)setPeriod(l,k+1)}})}
+  // Filled lessons first, by period; empty ones last
+  function ordered(d){
+    migrate(d);
+    return (d.lessons||[]).map(function(l,i){return {l:l,i:i}}).sort(function(a,b){
+      return (used(a.l)?0:1)-(used(b.l)?0:1)||(a.l.period||99)-(b.l.period||99)||a.i-b.i;
+    }).map(function(x){return x.l});
+  }
   function usedLessons(d){return (d.lessons||[]).filter(used)}
   function fmt(iso){if(!iso)return 'ללא תאריך';var p=iso.split('-');return +p[2]+'/'+ +p[1]+'/'+p[0].slice(2)}
   function today(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
@@ -368,7 +384,7 @@ button.danger{color:var(--danger)}
 
     var L=sorted();
     $('list').innerHTML=L.length?L.map(function(d){
-      var ls=usedLessons(d);
+      var ls=ordered(d).filter(used);
       var sum=ls.map(function(l){return [l.type,l.topic].filter(Boolean).join(' – ')}).filter(Boolean).join(' · ')||'אין שיעורים';
       var pills=(d.hasPhoto?'📷 ':'')+(d.signed?'<span class="pill ok">חתום</span>':'<span class="pill warn">לא חתום</span>')+
         ((d.reflection||'').trim()?'':' <span class="pill warn">רפלקציה</span>');
@@ -427,6 +443,7 @@ button.danger{color:var(--danger)}
     cur=state.days.filter(function(d){return d.id===id})[0];if(!cur)return;
     while((cur.lessons=cur.lessons||[]).length<ROWS)cur.lessons.push(blankLesson());
     $('dDate').value=cur.date||'';$('dSigned').checked=!!cur.signed;$('dRef').value=cur.reflection||'';
+    cur.lessons=ordered(cur);
     renderLessons();renderPhoto();show('day');
   }
   function renderPhoto(){
@@ -453,19 +470,20 @@ button.danger{color:var(--danger)}
     if(w)w.document.write('<title>צילום הטופס</title><body style="margin:0;background:#111"><img src="'+e.target.src+'" style="width:100%">');
   });
 
-  function lessonSummary(l){return [l.time,l.cls,l.room&&'חדר '+l.room,l.type,l.topic].filter(Boolean).join(' · ')}
+  function lessonSummary(l){return [periodText(l),l.cls,l.room&&'חדר '+l.room,l.type,l.topic].filter(Boolean).join(' · ')}
   function renderLessons(){
     var firstEmpty=cur.lessons.findIndex(function(l){return !used(l)});
     $('lessons').innerHTML=cur.lessons.map(function(l,i){
       var open=used(l)||i===firstEmpty;
       var opts='<option value="">בחירה…</option>'+TYPES.map(function(t){return '<option'+(l.type===t?' selected':'')+'>'+t+'</option>'}).join('');
       return '<div class="lesson card" data-i="'+i+'" style="padding:10px">'+
-        '<div class="lh"><span class="n">'+(i+1)+'</span><span class="sum">'+esc(lessonSummary(l)||'שיעור '+(i+1))+'</span>'+
+        '<div class="lh"><span class="n">'+(l.period||'·')+'</span><span class="sum">'+esc(lessonSummary(l)||'שיעור נוסף')+'</span>'+
         (open?'':'<button class="link" data-open>הוספה</button>')+'</div>'+
         '<div class="body"'+(open?'':' hidden')+'>'+
-          '<div class="row"><div><label>שעה</label><input type="time" data-f="time" value="'+esc(l.time)+'"></div>'+
-          '<div><label>הכיתה</label><input data-f="cls" value="'+esc(l.cls)+'" placeholder="למשל י&quot;ב"></div></div>'+
-          '<label>מיקום (חדר / אולם)</label><input data-f="room" value="'+esc(l.room)+'" placeholder="למשל 321 או אולם ספורט">'+
+          '<label>שעה</label><select data-f="period"><option value="">בחירה…</option>'+PERIODS.map(function(t,k){
+            return '<option value="'+(k+1)+'"'+(+l.period===k+1?' selected':'')+'>שעה '+(k+1)+' · '+ltr(t+'–'+addMin(t,45))+'</option>'}).join('')+'</select>'+
+          '<div class="row"><div><label>הכיתה</label><input data-f="cls" value="'+esc(l.cls)+'" placeholder="למשל י&quot;ב"></div>'+
+          '<div><label>מיקום (חדר / אולם)</label><input data-f="room" value="'+esc(l.room)+'" placeholder="למשל 321"></div></div>'+
           '<label>סוג הפעילות</label><select data-f="type">'+opts+'</select>'+
           '<label>המקצוע ונושא השיעור</label><input data-f="topic" value="'+esc(l.topic)+'">'+
           '<label>הערות</label><input data-f="notes" value="'+esc(l.notes)+'">'+
@@ -475,8 +493,10 @@ button.danger{color:var(--danger)}
   $('lessons').addEventListener('input',function(e){
     var f=e.target.dataset.f;if(!f)return;
     var box=e.target.closest('.lesson'),l=cur.lessons[+box.dataset.i];
-    l[f]=e.target.value;saveDay(cur);
-    box.querySelector('.sum').textContent=lessonSummary(l)||'שיעור '+(+box.dataset.i+1);
+    if(f==='period'){setPeriod(l,+e.target.value);box.querySelector('.n').textContent=l.period||'·'}
+    else l[f]=e.target.value;
+    saveDay(cur);
+    box.querySelector('.sum').textContent=lessonSummary(l)||'שיעור נוסף';
   });
   $('lessons').addEventListener('change',function(e){if(e.target.tagName==='SELECT')e.target.dispatchEvent(new Event('input',{bubbles:true}))});
   $('lessons').addEventListener('click',function(e){
@@ -490,9 +510,9 @@ button.danger{color:var(--danger)}
 
   /* Reflection suggestion: opens Claude with the day's details (no key or setup needed) */
   function aiPrompt(d){
-    var p=state.profile,ls=usedLessons(d);
+    var p=state.profile,ls=ordered(d).filter(used);
     var lines=ls.map(function(l,i){
-      return '- '+[l.time&&'בשעה '+l.time,l.cls&&'כיתה '+l.cls,l.room&&'חדר/אולם '+l.room,l.type,l.topic,l.notes&&'הערות: '+l.notes].filter(Boolean).join(', ');
+      return '- '+[periodText(l),l.cls&&'כיתה '+l.cls,l.room&&'חדר/אולם '+l.room,l.type,l.topic,l.notes&&'הערות: '+l.notes].filter(Boolean).join(', ');
     });
     return 'אני סטודנטית להוראה בהתנסות מעשית'+(p.school?' בבית הספר '+p.school:'')+'. '+
       'אני צריכה עזרה בכתיבת רפלקציה קצרה (4–6 משפטים, בגוף ראשון, בעברית פשוטה וכנה) ליום ההתנסות של '+fmt(d.date)+'.\n'+
@@ -536,8 +556,8 @@ button.danger{color:var(--danger)}
   /* ---------- Print (paper form layout) ---------- */
   function sheet(d){
     var p=state.profile;
-    var rows=d.lessons.slice(0,ROWS).map(function(l,i){
-      var n=(i+1)+(l.time?'<br>'+esc(l.time):'');
+    var rows=ordered(d).slice(0,ROWS).map(function(l,i){
+      var n=used(l)?(l.period||'')+(l.time?'<br><small>'+esc(timeRange(l))+'</small>':''):'';
       return '<tr><td>'+(i===0?esc(fmt(d.date)):'')+'</td><td style="text-align:center">'+n+'</td><td>'+esc(l.cls)+(l.room?'<br>חדר/אולם: '+esc(l.room):'')+'</td><td>'+esc(l.type)+'</td><td>'+esc(l.topic)+'</td><td>'+esc(l.notes)+'</td></tr>';
     }).join('');
     return '<div class="sheet">'+
@@ -585,9 +605,9 @@ button.danger{color:var(--danger)}
     var q=function(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
     var out=[['תאריך','שיעור מספר','שעה','הכיתה','מיקום','סוג הפעילות','המקצוע ונושא השיעור','הערות','חתום','רפלקציה']];
     sorted().reverse().forEach(function(d){
-      var ls=usedLessons(d);
+      var ls=ordered(d).filter(used);
       if(!ls.length)out.push([fmt(d.date),'','','','','','','',d.signed?'כן':'לא',d.reflection]);
-      d.lessons.forEach(function(l,i){if(used(l))out.push([fmt(d.date),i+1,l.time,l.cls,l.room||'',l.type,l.topic,l.notes,d.signed?'כן':'לא',l===ls[0]?d.reflection:''])});
+      ordered(d).forEach(function(l){if(used(l))out.push([fmt(d.date),l.period||'',l.time?l.time+(l.end?'-'+l.end:''):'',l.cls,l.room||'',l.type,l.topic,l.notes,d.signed?'כן':'לא',l===ls[0]?d.reflection:''])});
     });
     download('practicum-'+today()+'.csv','﻿'+out.map(function(r){return r.map(q).join(',')}).join('\n'),'text/csv');
   });
