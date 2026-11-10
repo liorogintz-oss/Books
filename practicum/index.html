@@ -528,6 +528,7 @@ button.danger{color:var(--danger)}
           '<label>סוג הפעילות</label><select data-f="type">'+opts+'</select>'+
           '<label>המקצוע ונושא השיעור</label><input data-f="topic" value="'+esc(l.topic)+'">'+
           '<label>הערות</label><input data-f="notes" value="'+esc(l.notes)+'">'+
+          '<div class="toolbar" style="margin-top:8px"><button class="link" data-dup>⧉ שכפול לשעה הבאה</button></div>'+
         '</div></div>';
     }).join('');
   }
@@ -540,7 +541,22 @@ button.danger{color:var(--danger)}
     box.querySelector('.sum').textContent=lessonSummary(l)||'שיעור נוסף';
   });
   $('lessons').addEventListener('change',function(e){if(e.target.tagName==='SELECT')e.target.dispatchEvent(new Event('input',{bubbles:true}))});
+  // Copy a lesson to the next period (a double lesson)
+  function duplicate(i){
+    var src=cur.lessons[i];
+    if(!used(src)){alert('השיעור הזה עדיין ריק.');return}
+    var next=src.period?+src.period+1:'';
+    if(src.period&&next>PERIODS.length){alert('אין שעה אחרי שעה '+src.period+'.');return}
+    if(next&&cur.lessons.some(function(l){return +l.period===next})){alert('כבר יש שיעור בשעה '+next+'.');return}
+    var k=cur.lessons.findIndex(function(l){return !used(l)});
+    if(k<0){alert('כל '+ROWS+' השיעורים של היום כבר מלאים.');return}
+    var c=JSON.parse(JSON.stringify(src));setPeriod(c,next);
+    cur.lessons[k]=c;cur.lessons=ordered(cur);saveDay(cur);renderLessons();
+    var box=$('lessons').querySelector('.lesson[data-i="'+cur.lessons.indexOf(c)+'"]');
+    if(box){box.scrollIntoView({block:'center',behavior:'smooth'});box.style.outline='2px solid var(--accent)';setTimeout(function(){box.style.outline=''},1200)}
+  }
   $('lessons').addEventListener('click',function(e){
+    if(e.target.hasAttribute('data-dup')){duplicate(+e.target.closest('.lesson').dataset.i);return}
     if(!e.target.hasAttribute('data-open'))return;
     var box=e.target.closest('.lesson');box.querySelector('.body').hidden=false;e.target.remove();
     var f=box.querySelector('input,select');if(f)f.focus();
