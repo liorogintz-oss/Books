@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>יומן התנסות בהוראה</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="../firebase-config.js"></script>
 <style>
 :root{
   --bg:#f6f5f2;--card:#fff;--ink:#1f2328;--muted:#6b7078;--line:#e2e0da;
@@ -53,6 +56,10 @@ button.danger{color:var(--danger)}
 .empty{color:var(--muted);text-align:center;padding:18px 0}
 .muted{color:var(--muted);font-size:13px}
 .toolbar{display:flex;gap:6px;flex-wrap:wrap}
+#sync{font-size:12px;color:var(--muted);white-space:nowrap}
+#sync.err{color:var(--danger)}
+.cloud{border-color:var(--accent);background:var(--accent-soft)}
+.photo img{display:block;max-width:100%;max-height:340px;border-radius:8px;border:1px solid var(--line);margin:8px 0;cursor:zoom-in}
 
 /* Printed form, laid out like the paper report */
 #print{display:none}
@@ -83,12 +90,21 @@ button.danger{color:var(--danger)}
 <header class="top">
   <button class="link" id="back" hidden aria-label="חזרה">→ חזרה</button>
   <h1 id="title">יומן התנסות בהוראה</h1>
+  <span id="sync"></span>
   <button class="link" id="printBtn" hidden>הדפסה</button>
 </header>
 
 <main>
   <!-- Home -->
   <section id="home">
+    <div class="card cloud" id="cloudSetup" hidden>
+      <h2 style="color:var(--ink)">שמירה בענן</h2>
+      <p style="margin-top:0">כדי שהיומן לא ילך לאיבוד ויהיה זמין גם בטלפון וגם במחשב, יוצרים יומן בענן. הימים שכבר מילאת במכשיר הזה יעלו אליו.</p>
+      <button class="primary" id="cloudNew">יצירת יומן בענן</button>
+      <label>יש כבר יומן? מדביקים את הקישור שלו:</label>
+      <div class="row"><input id="cloudCode" dir="ltr" placeholder="https://…#journal-…"><button id="cloudJoin" style="flex:0 0 auto">חיבור</button></div>
+      <p class="muted" id="cloudMsg"></p>
+    </div>
     <div class="card">
       <h2>סיכום</h2>
       <div class="stats" id="stats"></div>
@@ -119,9 +135,10 @@ button.danger{color:var(--danger)}
         <button id="csv">ייצוא לאקסל (CSV)</button>
         <button id="exp">שמירת גיבוי</button>
         <button id="imp">שחזור מגיבוי</button>
+        <button id="linkBtn" hidden>העתקת קישור ליומן</button>
         <input type="file" id="impFile" accept=".json,application/json" hidden>
       </div>
-      <p class="muted">הנתונים נשמרים בדפדפן הזה בלבד. כדאי לשמור גיבוי מדי פעם, ולהשתמש בו כדי להעביר את היומן למכשיר אחר.</p>
+      <p class="muted" id="saveNote"></p>
     </div>
   </section>
 
@@ -135,6 +152,16 @@ button.danger{color:var(--danger)}
     <div class="card">
       <h2>חתימת המורה המאמנת</h2>
       <div class="check"><input type="checkbox" id="dSigned"><label for="dSigned" style="margin:0;color:var(--ink)">המורה המאמנת חתמה על הדו"ח</label></div>
+    </div>
+    <div class="card photo">
+      <h2>צילום הטופס החתום</h2>
+      <div id="photoBox"></div>
+      <div class="toolbar">
+        <button id="photoAdd">צילום / העלאת תמונה</button>
+        <button class="danger" id="photoDel" hidden>הסרת התמונה</button>
+      </div>
+      <input type="file" id="photoFile" accept="image/*" hidden>
+      <p class="muted" id="photoMsg"></p>
     </div>
     <div class="card">
       <h2>רפלקציה</h2>
@@ -152,26 +179,175 @@ button.danger{color:var(--danger)}
 
 <script>
 (function(){
-  var KEY='practicum-log-v1', ROWS=6;
+  var KEY='practicum-log-v1', JKEY='practicum-journal', PKEY='practicum-photos', ROWS=6;
   var TYPES=['התנסות','צפייה','שיעור פרטני','אחר'];
-  var state=load(), cur=null;
   var $=function(id){return document.getElementById(id)};
+  var state=loadLocal(), cur=null;
 
-  function load(){
-    try{var s=JSON.parse(localStorage.getItem(KEY));if(s&&s.days)return s}catch(e){}
-    return {profile:{year:'תשפ"ז'},days:[]};
+  /* ---------- Storage: this browser always keeps a copy; Firebase (when set up) is the main store ---------- */
+  var cloud={fs:null,key:null,unsubs:[],timers:{},pending:0,error:''};
+  function lsGet(k,d){try{var v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}}
+  function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+  function loadLocal(){var s=lsGet(KEY,null);if(s&&s.days)return s;return {profile:{year:'תשפ"ז'},days:[]}}
+  function saveLocal(){lsSet(KEY,state)}
+  function dayData(d){return {date:d.date||'',lessons:d.lessons,signed:!!d.signed,reflection:d.reflection||'',hasPhoto:!!d.hasPhoto,updatedAt:Date.now()}}
+  function jdoc(){return cloud.fs.doc('journals/'+cloud.key)}
+
+  function track(p){
+    cloud.pending++;setSync();
+    p.then(function(){cloud.error=''},function(e){console.warn(e);cloud.error=errText(e)})
+     .then(function(){cloud.pending--;setSync()});
+    return p;
   }
-  function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){alert('השמירה בדפדפן נכשלה. כדאי לשמור גיבוי.')}}
+  function errText(e){
+    var c=e&&e.code;
+    if(c==='permission-denied')return 'Firebase חסם את השמירה: צריך לעדכן את כללי האבטחה (firestore.rules).';
+    if(c==='unavailable'||c==='deadline-exceeded')return 'אין חיבור לאינטרנט. השינויים יישמרו כשהחיבור יחזור.';
+    if(c==='invalid-argument'||c==='resource-exhausted')return 'הנתונים גדולים מדי לשמירה.';
+    return 'השמירה בענן לא הצליחה. נסו שוב.';
+  }
+  function setSync(){
+    var el=$('sync');el.className='';
+    if(!cloud.key){el.textContent=cloud.fs?'לא מחובר לענן':'';return}
+    if(cloud.error){el.textContent='⚠ לא נשמר';el.className='err';el.title=cloud.error;return}
+    el.textContent=(cloud.pending||Object.keys(cloud.timers).length)?'שומר…':'✓ נשמר בענן';el.title='';
+  }
+  // Debounced so typing doesn't send a write per keystroke
+  function later(k,fn){clearTimeout(cloud.timers[k]);cloud.timers[k]=setTimeout(function(){delete cloud.timers[k];fn();setSync()},700);setSync()}
+  function saveDay(d){saveLocal();if(cloud.key)later('d'+d.id,function(){track(jdoc().collection('days').doc(d.id).set(dayData(d)))})}
+  function saveProfile(){saveLocal();if(cloud.key)later('p',function(){track(jdoc().set({profile:state.profile},{merge:true}))})}
+  function removeDay(d){
+    state.days=state.days.filter(function(x){return x!==d});saveLocal();delPhotoLocal(d.id);
+    if(cloud.key){clearTimeout(cloud.timers['d'+d.id]);delete cloud.timers['d'+d.id];
+      track(jdoc().collection('days').doc(d.id).delete());
+      if(d.hasPhoto)track(jdoc().collection('photos').doc(d.id).delete());}
+  }
+
+  /* Photos: kept apart from the days so the list loads fast */
+  var photoCache={};
+  function delPhotoLocal(id){var m=lsGet(PKEY,{});delete m[id];lsSet(PKEY,m);delete photoCache[id]}
+  function getPhoto(d){
+    if(photoCache[d.id]!==undefined)return Promise.resolve(photoCache[d.id]);
+    if(!cloud.key){var m=lsGet(PKEY,{});return Promise.resolve(photoCache[d.id]=m[d.id]||'')}
+    return jdoc().collection('photos').doc(d.id).get().then(function(s){return photoCache[d.id]=s.exists?s.data().img||'':''},function(){return ''});
+  }
+  function putPhoto(d,img){
+    photoCache[d.id]=img;d.hasPhoto=!!img;
+    if(cloud.key){
+      var r=jdoc().collection('photos').doc(d.id);
+      track(img?r.set({img:img}):r.delete());saveDay(d);return true;
+    }
+    var m=lsGet(PKEY,{});if(img)m[d.id]=img;else delete m[d.id];
+    var ok=lsSet(PKEY,m);if(!ok){d.hasPhoto=false;delete photoCache[d.id]}saveLocal();return ok;
+  }
+  function shrink(file,max,q){
+    return new Promise(function(res,rej){
+      var img=new Image();
+      img.onload=function(){
+        var s=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');
+        c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);res(c.toDataURL('image/jpeg',q));
+      };
+      img.onerror=rej;img.src=URL.createObjectURL(file);
+    });
+  }
+
+  /* ---------- Cloud connection ---------- */
+  function parseKey(v){v=String(v||'').trim();var m=v.match(/journal-([a-z0-9]{12,})/i);var k=m?m[1]:v;return /^[a-z0-9]{12,}$/i.test(k)?k.toLowerCase():''}
+  function link(){return location.origin+location.pathname+'#journal-'+cloud.key}
+  function initCloud(){
+    var cfg=window.FIREBASE_CONFIG;
+    if(!(cfg&&cfg.projectId&&window.firebase&&firebase.firestore)){renderHome();return}
+    try{if(!firebase.apps.length)firebase.initializeApp(cfg);cloud.fs=firebase.firestore()}catch(e){console.warn(e);renderHome();return}
+    cloud.fs.enablePersistence({synchronizeTabs:true}).catch(function(){});
+    var fromHash=parseKey(location.hash);
+    if(fromHash){try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}
+    var key=fromHash||lsGet(JKEY,null);
+    if(key)connect(key,!!fromHash&&key!==lsGet(JKEY,null));else renderHome();
+  }
+  function connect(key,joining){
+    return cloud.fs.doc('journals/'+key).get().then(function(snap){
+      if(!snap.exists){
+        if(key===lsGet(JKEY,null))lsSet(JKEY,null);
+        cloud.key=null;renderHome();$('cloudMsg').textContent='הקישור הזה לא שייך לאף יומן. בדקו שהעתקתם אותו במלואו.';return;
+      }
+      var localDays=state.days.slice(), localProfile=state.profile;
+      cloud.key=key;lsSet(JKEY,key);
+      cloud.unsubs.forEach(function(u){u()});
+      cloud.unsubs=[
+        jdoc().onSnapshot(function(s){
+          var p=(s.data()||{}).profile;
+          if(p&&!cloud.timers.p){state.profile=p;saveLocal();if(!cur)renderHome()}
+        },onErr),
+        jdoc().collection('days').onSnapshot(function(q){
+          var arr=q.docs.map(function(d){var x=d.data();x.id=d.id;return x});
+          // Keep local versions of days still being edited or waiting to be sent
+          arr=arr.map(function(x){
+            if((cur&&cur.id===x.id)||cloud.timers['d'+x.id])return state.days.filter(function(d){return d.id===x.id})[0]||x;
+            return x;
+          });
+          state.days.forEach(function(d){if(cloud.timers['d'+d.id]&&!arr.some(function(x){return x.id===d.id}))arr.push(d)});
+          if(cur&&!arr.some(function(x){return x.id===cur.id}))arr.push(cur);
+          state.days=arr;saveLocal();if(!cur)renderHome();
+        },onErr)
+      ];
+      setSync();renderHome();
+      // Bring up days that were only on this device
+      if(joining&&localDays.length){
+        if(confirm('במכשיר הזה יש '+localDays.length+' ימים שלא שמורים בענן. להוסיף אותם ליומן?'))uploadAll(localDays,null);
+      }
+      return snap;
+    },function(e){console.warn(e);renderHome();$('cloudMsg').textContent=errText(e)});
+  }
+  function onErr(e){console.warn(e);cloud.error=errText(e);setSync();renderHome()}
+  function uploadAll(days,profile){
+    var photos=lsGet(PKEY,{});
+    if(profile)track(jdoc().set({profile:profile},{merge:true}));
+    days.forEach(function(d){
+      track(jdoc().collection('days').doc(d.id).set(dayData(d)));
+      if(photos[d.id])track(jdoc().collection('photos').doc(d.id).set({img:photos[d.id]}));
+    });
+  }
+  function createJournal(){
+    var a=new Uint8Array(15);crypto.getRandomValues(a);
+    var key=Array.prototype.map.call(a,function(n){return 'abcdefghijkmnpqrstuvwxyz23456789'[n%32]}).join('');
+    var days=state.days.slice(),profile=state.profile;
+    return cloud.fs.doc('journals/'+key).set({profile:profile,createdAt:Date.now()}).then(function(){
+      return connect(key,false).then(function(){uploadAll(days,null)});
+    });
+  }
+  $('cloudNew').addEventListener('click',function(){
+    var b=this;b.disabled=true;$('cloudMsg').textContent='';
+    createJournal().then(function(){copyLink(true)},function(e){console.warn(e);$('cloudMsg').textContent=errText(e)}).then(function(){b.disabled=false});
+  });
+  $('cloudJoin').addEventListener('click',function(){
+    var k=parseKey($('cloudCode').value);
+    if(!k){$('cloudMsg').textContent='זה לא נראה כמו קישור ליומן. הדביקו את כל הקישור.';return}
+    connect(k,true);
+  });
+  function copyLink(fresh){
+    var t=link(),msg=fresh?'היומן נוצר. שמרו את הקישור כדי לפתוח אותו במכשיר אחר:\n\n':'';
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){alert(msg+'הקישור הועתק:\n'+t)},function(){prompt(msg+'העתיקו את הקישור:',t)});
+  }
+  $('linkBtn').addEventListener('click',function(){copyLink(false)});
+
+  /* ---------- Helpers ---------- */
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
   function blankLesson(){return {time:'',cls:'',type:'',topic:'',notes:''}}
   function used(l){return l.time||l.cls||l.type||l.topic||l.notes}
-  function usedLessons(d){return d.lessons.filter(used)}
+  function usedLessons(d){return (d.lessons||[]).filter(used)}
   function fmt(iso){if(!iso)return 'ללא תאריך';var p=iso.split('-');return +p[2]+'/'+ +p[1]+'/'+p[0].slice(2)}
   function today(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
   function sorted(){return state.days.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'')})}
 
   /* ---------- Home ---------- */
   function renderHome(){
+    $('cloudSetup').hidden=!(cloud.fs&&!cloud.key);
+    $('linkBtn').hidden=!cloud.key;
+    $('saveNote').textContent=cloud.key
+      ?'היומן נשמר בענן ומתעדכן בכל מכשיר שנפתח בו עם הקישור. מי שיש לו את הקישור יכול לראות ולערוך, לכן לא משתפים אותו ברבים.'
+      :'הנתונים נשמרים כרגע בדפדפן הזה בלבד. כדאי לשמור גיבוי מדי פעם.';
+    setSync();
     var days=state.days, n={}, total=0, unsigned=0, noRef=0;
     TYPES.forEach(function(t){n[t]=0});
     days.forEach(function(d){
@@ -189,16 +365,16 @@ button.danger{color:var(--danger)}
     $('list').innerHTML=L.length?L.map(function(d){
       var ls=usedLessons(d);
       var sum=ls.map(function(l){return [l.type,l.topic].filter(Boolean).join(' – ')}).filter(Boolean).join(' · ')||'אין שיעורים';
-      var pills=(d.signed?'<span class="pill ok">חתום</span>':'<span class="pill warn">לא חתום</span>')+
+      var pills=(d.hasPhoto?'📷 ':'')+(d.signed?'<span class="pill ok">חתום</span>':'<span class="pill warn">לא חתום</span>')+
         ((d.reflection||'').trim()?'':' <span class="pill warn">רפלקציה</span>');
       return '<div class="day" data-id="'+d.id+'"><span class="d">'+fmt(d.date)+'</span><span class="s">'+ls.length+' שיעורים · '+esc(sum)+'</span>'+pills+'</div>';
     }).join(''):'<div class="empty">עוד אין ימים. לחצי על "יום חדש".</div>';
 
-    document.querySelectorAll('[data-p]').forEach(function(el){el.value=state.profile[el.dataset.p]||''});
+    document.querySelectorAll('[data-p]').forEach(function(el){if(el!==document.activeElement)el.value=state.profile[el.dataset.p]||''});
   }
   $('list').addEventListener('click',function(e){var r=e.target.closest('.day');if(r)openDay(r.dataset.id)});
   document.querySelectorAll('[data-p]').forEach(function(el){
-    el.addEventListener('input',function(){state.profile[el.dataset.p]=el.value;save();if(el.dataset.p==='goal')renderHome()});
+    el.addEventListener('input',function(){state.profile[el.dataset.p]=el.value;saveProfile();if(el.dataset.p==='goal')renderHome()});
   });
 
   /* ---------- Day ---------- */
@@ -208,13 +384,38 @@ button.danger{color:var(--danger)}
     // Carry the class from the most recent day, since it rarely changes
     var last=sorted()[0];
     if(last){var lc=usedLessons(last).map(function(l){return l.cls}).filter(Boolean)[0];if(lc)d.lessons[0].cls=lc}
-    state.days.push(d);save();openDay(d.id);
+    state.days.push(d);saveDay(d);openDay(d.id);
   }
   function openDay(id){
     cur=state.days.filter(function(d){return d.id===id})[0];if(!cur)return;
+    while((cur.lessons=cur.lessons||[]).length<ROWS)cur.lessons.push(blankLesson());
     $('dDate').value=cur.date||'';$('dSigned').checked=!!cur.signed;$('dRef').value=cur.reflection||'';
-    renderLessons();show('day');
+    renderLessons();renderPhoto();show('day');
   }
+  function renderPhoto(){
+    var d=cur;$('photoMsg').textContent='';$('photoDel').hidden=!d.hasPhoto;
+    $('photoBox').innerHTML=d.hasPhoto?'<p class="muted">טוען…</p>':'';
+    if(d.hasPhoto)getPhoto(d).then(function(img){if(cur!==d)return;$('photoBox').innerHTML=img?'<img src="'+img+'" alt="צילום הטופס">':''});
+  }
+  $('photoAdd').addEventListener('click',function(){$('photoFile').click()});
+  $('photoFile').addEventListener('change',function(){
+    var f=this.files[0];this.value='';if(!f||!cur)return;var d=cur;
+    $('photoMsg').textContent='מעבד תמונה…';
+    (async function(){
+      var img='',sizes=[[1600,.72],[1300,.65],[1000,.6]];
+      for(var i=0;i<sizes.length;i++){img=await shrink(f,sizes[i][0],sizes[i][1]);if(img.length<900000)break}
+      return img;
+    })().then(function(img){
+      if(!putPhoto(d,img)){$('photoMsg').textContent='אין מקום בדפדפן לתמונה. חברו את היומן לענן.';return}
+      if(cur===d)renderPhoto();
+    },function(){$('photoMsg').textContent='לא הצלחנו לקרוא את התמונה. נסו קובץ JPG או PNG.'});
+  });
+  $('photoDel').addEventListener('click',function(){if(confirm('להסיר את התמונה?')){putPhoto(cur,'');renderPhoto()}});
+  $('photoBox').addEventListener('click',function(e){
+    if(e.target.tagName!=='IMG')return;var w=window.open();
+    if(w)w.document.write('<title>צילום הטופס</title><body style="margin:0;background:#111"><img src="'+e.target.src+'" style="width:100%">');
+  });
+
   function lessonSummary(l){return [l.time,l.cls,l.type,l.topic].filter(Boolean).join(' · ')}
   function renderLessons(){
     var firstEmpty=cur.lessons.findIndex(function(l){return !used(l)});
@@ -236,7 +437,7 @@ button.danger{color:var(--danger)}
   $('lessons').addEventListener('input',function(e){
     var f=e.target.dataset.f;if(!f)return;
     var box=e.target.closest('.lesson'),l=cur.lessons[+box.dataset.i];
-    l[f]=e.target.value;save();
+    l[f]=e.target.value;saveDay(cur);
     box.querySelector('.sum').textContent=lessonSummary(l)||'שיעור '+(+box.dataset.i+1);
   });
   $('lessons').addEventListener('change',function(e){if(e.target.tagName==='SELECT')e.target.dispatchEvent(new Event('input',{bubbles:true}))});
@@ -245,12 +446,12 @@ button.danger{color:var(--danger)}
     var box=e.target.closest('.lesson');box.querySelector('.body').hidden=false;e.target.remove();
     var f=box.querySelector('input,select');if(f)f.focus();
   });
-  $('dDate').addEventListener('input',function(){cur.date=this.value;save();$('title').textContent=fmt(cur.date)});
-  $('dSigned').addEventListener('change',function(){cur.signed=this.checked;save()});
-  $('dRef').addEventListener('input',function(){cur.reflection=this.value;save()});
+  $('dDate').addEventListener('input',function(){cur.date=this.value;saveDay(cur);$('title').textContent=fmt(cur.date)});
+  $('dSigned').addEventListener('change',function(){cur.signed=this.checked;saveDay(cur)});
+  $('dRef').addEventListener('input',function(){cur.reflection=this.value;saveDay(cur)});
   $('delDay').addEventListener('click',function(){
     if(!confirm('למחוק את הדו"ח של '+fmt(cur.date)+'?'))return;
-    state.days=state.days.filter(function(d){return d!==cur});save();show('home');
+    var d=cur;cur=null;removeDay(d);show('home');
   });
 
   /* ---------- Navigation ---------- */
@@ -258,18 +459,22 @@ button.danger{color:var(--danger)}
     var day=v==='day';
     $('home').hidden=day;$('dayView').hidden=!day;$('back').hidden=!day;$('printBtn').hidden=!day;$('newDay').hidden=day;
     $('title').textContent=day?fmt(cur.date):'יומן התנסות בהוראה';
-    if(!day){
-      cur=null;renderHome();
-    }
+    if(!day){cur=null;renderHome()}
     window.scrollTo(0,0);
   }
   $('back').addEventListener('click',function(){show('home')});
   $('newDay').addEventListener('click',newDay);
+  window.addEventListener('beforeunload',function(e){if(Object.keys(cloud.timers).length){Object.keys(cloud.timers).forEach(function(k){clearTimeout(cloud.timers[k])});flushAll();}});
+  function flushAll(){
+    if(!cloud.key)return;
+    jdoc().set({profile:state.profile},{merge:true});
+    state.days.forEach(function(d){jdoc().collection('days').doc(d.id).set(dayData(d))});
+  }
 
   /* ---------- Print (paper form layout) ---------- */
   function sheet(d){
     var p=state.profile;
-    var rows=d.lessons.map(function(l,i){
+    var rows=d.lessons.slice(0,ROWS).map(function(l,i){
       var n=(i+1)+(l.time?'<br>'+esc(l.time):'');
       return '<tr><td>'+(i===0?esc(fmt(d.date)):'')+'</td><td style="text-align:center">'+n+'</td><td>'+esc(l.cls)+'</td><td>'+esc(l.type)+'</td><td>'+esc(l.topic)+'</td><td>'+esc(l.notes)+'</td></tr>';
     }).join('');
@@ -289,6 +494,7 @@ button.danger{color:var(--danger)}
   }
   function printDays(list){
     if(!list.length){alert('אין דוחות להדפסה');return}
+    list.forEach(function(d){while((d.lessons=d.lessons||[]).length<ROWS)d.lessons.push(blankLesson())});
     $('print').innerHTML=list.map(sheet).join('');window.print();
   }
   $('printBtn').addEventListener('click',function(){printDays([cur])});
@@ -305,8 +511,11 @@ button.danger{color:var(--danger)}
     var f=this.files[0];if(!f)return;var r=new FileReader();
     r.onload=function(){
       try{var s=JSON.parse(r.result);if(!s||!Array.isArray(s.days))throw 0;
-        if(!confirm('השחזור יחליף את כל הנתונים הנוכחיים ('+state.days.length+' ימים) ב־'+s.days.length+' ימים מהגיבוי. להמשיך?'))return;
-        s.profile=s.profile||{};state=s;save();renderHome();
+        if(!confirm('לשחזר '+s.days.length+' ימים מהגיבוי? ימים עם אותו מזהה יוחלפו בגרסה מהגיבוי.'))return;
+        var byId={};state.days.forEach(function(d){byId[d.id]=d});s.days.forEach(function(d){if(d&&d.id)byId[d.id]=d});
+        state.days=Object.keys(byId).map(function(k){return byId[k]});
+        if(s.profile)state.profile=s.profile;
+        saveLocal();if(cloud.key)uploadAll(s.days.map(function(d){d.hasPhoto=false;return d}),state.profile);renderHome();
       }catch(e){alert('הקובץ אינו גיבוי תקין')}
     };r.readAsText(f);this.value='';
   });
@@ -322,6 +531,7 @@ button.danger{color:var(--danger)}
   });
 
   renderHome();
+  initCloud();
 })();
 </script>
 </body>
