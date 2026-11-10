@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // A journal is reachable only by the long random code in its link. Nobody can list journals.
+    match /journals/{j} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if j.size() >= 12 && j.matches('^[a-z0-9]+$');
+      allow update: if request.resource.data.keys().hasOnly(['profile', 'createdAt']);
+      allow delete: if false;
+
+      match /days/{day} {
+        allow read, write: if exists(/databases/$(database)/documents/journals/$(j));
+      }
+      match /photos/{day} {
+        allow read, write: if exists(/databases/$(database)/documents/journals/$(j));
+      }
+    }
+  }
+}
