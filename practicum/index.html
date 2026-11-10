@@ -167,6 +167,11 @@ button.danger{color:var(--danger)}
       <h2>רפלקציה</h2>
       <p class="muted" style="margin-top:0">תובנה / דבר חדש שלמדתי היום על עצמי, מקרא, בית הספר / דבר אחד שאאמץ לעבודתי כמורה או להתנסות / דבר אחד לא אחזור עליו בהתנסות.</p>
       <textarea id="dRef" rows="6"></textarea>
+      <div class="toolbar" style="margin-top:8px">
+        <button id="aiBtn">✨ הצעה לרפלקציה מ־Claude</button>
+        <button id="aiCopy">העתקת הבקשה</button>
+      </div>
+      <p class="muted" id="aiMsg">הכפתור פותח את Claude עם פרטי היום ומבקש הצעה לרפלקציה. מעתיקים את מה שמתאים ומדביקים כאן.</p>
     </div>
     <div class="toolbar">
       <button class="danger" id="delDay">מחיקת היום</button>
@@ -482,6 +487,30 @@ button.danger{color:var(--danger)}
   $('dDate').addEventListener('input',function(){cur.date=this.value;saveDay(cur);$('title').textContent=fmt(cur.date)});
   $('dSigned').addEventListener('change',function(){cur.signed=this.checked;saveDay(cur)});
   $('dRef').addEventListener('input',function(){cur.reflection=this.value;saveDay(cur)});
+
+  /* Reflection suggestion: opens Claude with the day's details (no key or setup needed) */
+  function aiPrompt(d){
+    var p=state.profile,ls=usedLessons(d);
+    var lines=ls.map(function(l,i){
+      return '- '+[l.time&&'בשעה '+l.time,l.cls&&'כיתה '+l.cls,l.room&&'חדר/אולם '+l.room,l.type,l.topic,l.notes&&'הערות: '+l.notes].filter(Boolean).join(', ');
+    });
+    return 'אני סטודנטית להוראה בהתנסות מעשית'+(p.school?' בבית הספר '+p.school:'')+'. '+
+      'אני צריכה עזרה בכתיבת רפלקציה קצרה (4–6 משפטים, בגוף ראשון, בעברית פשוטה וכנה) ליום ההתנסות של '+fmt(d.date)+'.\n'+
+      'הרפלקציה עונה על: תובנה או דבר חדש שלמדתי היום על עצמי / על המקרא / על בית הספר, דבר אחד שאאמץ לעבודתי כמורה, ודבר אחד שלא אחזור עליו.\n\n'+
+      'מה היה היום:\n'+(lines.length?lines.join('\n'):'(לא פורטו שיעורים)')+
+      ((d.reflection||'').trim()?'\n\nמה שכבר כתבתי (אפשר לשפר ולהרחיב):\n'+d.reflection.trim():'')+
+      '\n\nיש לכתוב רק את הרפלקציה, בלי הקדמה, ובלי להמציא פרטים שלא הופיעו למעלה.';
+  }
+  $('aiBtn').addEventListener('click',function(){
+    if(!usedLessons(cur).length&&!(cur.reflection||'').trim()){$('aiMsg').textContent='כדאי למלא קודם לפחות שיעור אחד, כדי שההצעה תתבסס על היום.';return}
+    window.open('https://claude.ai/new?q='+encodeURIComponent(aiPrompt(cur)),'_blank');
+  });
+  $('aiCopy').addEventListener('click',function(){
+    var t=aiPrompt(cur);
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(
+      function(){$('aiMsg').textContent='הבקשה הועתקה. אפשר להדביק אותה בכל צ׳אט AI.'},
+      function(){prompt('העתיקו את הבקשה:',t)});
+  });
   $('delDay').addEventListener('click',function(){
     if(!confirm('למחוק את הדו"ח של '+fmt(cur.date)+'?'))return;
     var d=cur;cur=null;removeDay(d);show('home');
