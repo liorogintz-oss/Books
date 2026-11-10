@@ -142,7 +142,7 @@ button.danger{color:var(--danger)}
       <label>כיתת האימונים וביה"ס</label><select data-p="school"></select>
       <label>המורה המאמנת</label><select data-p="mentor"></select>
       <label>המדריכה הפדגוגית</label><select data-p="instructor"></select>
-      <label>שעות נדרשות בכל יום התנסות (שבוע)</label><input data-p="weekly" type="number" min="0" inputmode="numeric" placeholder="6">
+      <label>שעות נדרשות בכל שבוע</label><input data-p="weekly" type="number" min="0" inputmode="numeric" placeholder="6">
       <label>יעד ימי התנסות (לא חובה)</label><input data-p="goal" type="number" min="0" inputmode="numeric">
     </div>
 
@@ -389,6 +389,16 @@ button.danger{color:var(--danger)}
   function usedLessons(d){return (d.lessons||[]).filter(used)}
   function fmt(iso){if(!iso)return 'ללא תאריך';var p=iso.split('-');return +p[2]+'/'+ +p[1]+'/'+p[0].slice(2)}
   function today(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+  // Number of calendar weeks (Sunday–Saturday) that have at least one practicum day
+  function weeksOf(list){
+    var w={};
+    list.forEach(function(d){
+      if(!d.date){w['x'+d.id]=1;return}
+      var p=d.date.split('-'),x=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+      x.setUTCDate(x.getUTCDate()-x.getUTCDay());w[x.toISOString().slice(0,10)]=1;
+    });
+    return Object.keys(w).length;
+  }
   function sorted(){return state.days.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'')})}
 
   /* ---------- Home ---------- */
@@ -411,13 +421,13 @@ button.danger{color:var(--danger)}
     if(unsigned)h+='<div class="stat" style="background:var(--warn-soft)"><b style="color:var(--warn)">'+unsigned+'</b><span>חסרה חתימה</span></div>';
     if(noRef)h+='<div class="stat" style="background:var(--warn-soft)"><b style="color:var(--warn)">'+noRef+'</b><span>חסרה רפלקציה</span></div>';
     // Hours balance: each practicum day so far requires WEEKLY lesson hours
-    var weekly=+state.profile.weekly||6,t=today(),past=days.filter(function(d){return !d.date||d.date<=t});
+    var weekly=+state.profile.weekly||6,t=today(),past=days.filter(function(d){return !d.date||d.date<=t}),wk=weeksOf(past);
     if(past.length){
-      var need=past.length*weekly,done=0;
+      var need=wk*weekly,done=0;
       past.forEach(function(d){done+=usedLessons(d).length});
       var gap=done-need,ok=gap>=0;
       h+='<div class="stat balance" style="grid-column:1/-1;background:var('+(ok?'--ok-soft':'--warn-soft')+')">'+
-        '<span>שעות שבוצעו מול הנדרש ('+past.length+' ימים × '+weekly+' שעות)</span>'+
+        '<span>שעות שבוצעו מול הנדרש ('+wk+(wk===1?' שבוע':' שבועות')+' × '+weekly+' שעות)</span>'+
         '<b style="color:var('+(ok?'--ok':'--warn')+')">'+done+' מתוך '+need+'</b>'+
         '<span style="color:var(--ink);font-size:14px">'+(gap>0?'בזכות: '+gap+' שעות מעבר לנדרש':gap===0?'בדיוק לפי הנדרש':'בחובה: '+(-gap)+' שעות. אפשר להשלים בשבועות הבאים')+'</span></div>';
     }
@@ -660,7 +670,7 @@ button.danger{color:var(--danger)}
     var p=state.profile,m=$('rangeSel').value,weekly=+p.weekly||6,t=today();
     var n={},total=0,signed=0,refl=0;TYPES.forEach(function(x){n[x]=0});
     list.forEach(function(d){var ls=usedLessons(d);total+=ls.length;ls.forEach(function(l){if(l.type)n[l.type]++});if(d.signed)signed++;if((d.reflection||'').trim())refl++});
-    var past=list.filter(function(d){return !d.date||d.date<=t}),need=past.length*weekly,done=0;
+    var past=list.filter(function(d){return !d.date||d.date<=t}),wk=weeksOf(past),need=wk*weekly,done=0;
     past.forEach(function(d){done+=usedLessons(d).length});
     var gap=done-need;
     var row=function(a,b){return '<tr><td>'+a+'</td><td>'+b+'</td></tr>'};
@@ -685,7 +695,8 @@ button.danger{color:var(--danger)}
       '<h2>סיכום</h2><table class="sum"><tbody>'+
         row('ימי התנסות',list.length)+row('שיעורים',total)+
         TYPES.filter(function(x){return n[x]}).map(function(x){return row('— '+x,n[x])}).join('')+
-        row('שעות שבוצעו מול הנדרש ('+past.length+' ימים × '+weekly+')',done+' מתוך '+need)+
+        row('שבועות התנסות',wk)+
+        row('שעות שבוצעו מול הנדרש ('+wk+(wk===1?' שבוע':' שבועות')+' × '+weekly+')',done+' מתוך '+need)+
         row('מאזן',gap>0?'בזכות '+gap+' שעות':gap===0?'בדיוק לפי הנדרש':'בחובה '+(-gap)+' שעות')+
         row('ימים עם חתימת המורה המאמנת',signed+' מתוך '+list.length)+
         row('ימים עם רפלקציה',refl+' מתוך '+list.length)+
