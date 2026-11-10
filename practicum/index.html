@@ -83,6 +83,7 @@ button.danger{color:var(--danger)}
   .sheet .sig span{border-bottom:1px solid #000;display:inline-block;min-width:55mm;padding:0 2mm}
   .sheet .refq{margin-top:7mm;font-size:10.5pt;font-weight:700}
   .sheet .ref{margin-top:2mm;font-size:11pt;white-space:pre-wrap;min-height:40mm}
+  .plogo{display:block;margin:0 auto 3mm;height:17mm}
   .report{font-family:Arial,sans-serif;color:#000;font-size:10pt}
   .report h1{text-align:center;font-size:16pt;margin:0 0 1mm}
   .report .sub{text-align:center;font-size:11pt;margin:0 0 5mm}
@@ -617,7 +618,7 @@ button.danger{color:var(--danger)}
       var n=used(l)?(l.period||'')+(l.time?'<br><small>'+esc(timeRange(l))+'</small>':''):'';
       return '<tr><td>'+(i===0?esc(fmt(d.date)):'')+'</td><td style="text-align:center">'+n+'</td><td>'+esc(l.cls)+(l.room?'<br>חדר/אולם: '+esc(l.room):'')+'</td><td>'+esc(l.type)+'</td><td>'+esc(l.topic)+'</td><td>'+esc(l.notes)+'</td></tr>';
     }).join('');
-    return '<div class="sheet">'+
+    return '<div class="sheet">'+LOGO+
       (p.college?'<p class="t1">'+esc(p.college)+'</p>':'')+
       '<p class="t1">'+esc(p.year||'')+'</p>'+
       '<p class="t2">דו"ח יומי על התנסות בהוראה</p>'+
@@ -631,10 +632,16 @@ button.danger{color:var(--danger)}
       '<div class="ref">'+esc(d.reflection)+'</div>'+
     '</div>';
   }
+  // College logo at the top of every printout (preloaded so it is ready when printing)
+  var LOGO='<img class="plogo" src="logo.png" alt="">';new Image().src='logo.png';
+  function printWhenReady(){
+    var imgs=[].slice.call($('print').querySelectorAll('img'));
+    return Promise.all(imgs.map(function(i){return i.complete?0:new Promise(function(r){i.onload=i.onerror=r})}));
+  }
   function printDays(list){
     if(!list.length){alert('אין דוחות להדפסה');return}
     list.forEach(function(d){while((d.lessons=d.lessons||[]).length<ROWS)d.lessons.push(blankLesson())});
-    $('print').innerHTML=list.map(sheet).join('');window.print();
+    $('print').innerHTML=list.map(sheet).join('');printWhenReady().then(function(){window.print()});
   }
   $('printBtn').addEventListener('click',function(){printDays([cur])});
   $('printAll').addEventListener('click',function(){printDays(inRange())});
@@ -671,7 +678,7 @@ button.danger{color:var(--danger)}
       return '<div class="refl"><b>'+fmt(d.date)+'</b><div>'+esc(d.reflection.trim())+'</div></div>'}).join('')||'<p>אין רפלקציות בתקופה הזו.</p>';
     var phs=photos.filter(function(x){return x.img}).map(function(x){
       return '<div class="ph"><b>'+fmt(x.d.date)+'</b><br><img src="'+x.img+'" alt=""></div>'}).join('');
-    return '<div class="report">'+
+    return '<div class="report">'+LOGO+
       '<h1>דוח מסכם – התנסות בהוראה</h1>'+
       '<p class="sub">'+(m?monthName(m):'כל התקופה')+(range?' · '+range:'')+(p.year?' · '+esc(p.year):'')+(p.college?' · '+esc(p.college):'')+'</p>'+
       '<div class="info">'+info+'</div>'+
@@ -694,9 +701,7 @@ button.danger{color:var(--danger)}
     Promise.all(list.filter(function(d){return want&&d.hasPhoto}).map(function(d){return getPhoto(d).then(function(img){return {d:d,img:img}})}))
       .then(function(ph){
         $('print').innerHTML=report(list,ph);
-        // Give the photos a moment to load before the print dialog opens
-        var imgs=[].slice.call($('print').querySelectorAll('img'));
-        return Promise.all(imgs.map(function(i){return i.complete?0:new Promise(function(r){i.onload=i.onerror=r})}));
+        return printWhenReady();
       })
       .then(function(){b.disabled=false;b.textContent='דוח מסכם';window.print()});
   });
