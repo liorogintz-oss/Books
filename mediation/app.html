@@ -159,13 +159,29 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:12p
 .mono{font-family:var(--mono);font-size:.85rem}
 .consent ol{margin:0;padding-inline-start:22px;display:grid;gap:8px}
 .consent li b{font-family:var(--display)}
+.tracks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.trackbtn{display:grid;gap:4px;text-align:right;padding:14px;border-radius:var(--r);align-content:start}
+.trackbtn b{font-family:var(--display);font-size:1.02rem}
+.trackbtn svg{width:28px;height:28px}
+.trackpick{display:flex;gap:6px;flex-wrap:wrap}
+.trackpick button{border-radius:999px;padding:5px 12px;font-size:.88rem}
+.trackpick button[aria-pressed="true"]{background:var(--med);border-color:var(--med);color:var(--on-med)}
+.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px}
+.incidents{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.incidents li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 10px;background:var(--sunk);border-radius:8px}
+.incidents time{font-family:var(--mono);font-size:.82rem;color:var(--muted);white-space:nowrap}
+.incidents span{overflow-wrap:anywhere}
+.plan{margin:0;padding-inline-start:22px;display:grid;gap:2px;font-variant-numeric:tabular-nums}
+.invite{white-space:pre-wrap;background:var(--sunk);border-radius:8px;padding:10px;font-size:.92rem;overflow-wrap:anywhere}
+.info{margin:0;padding-inline-start:20px;display:grid;gap:5px;font-size:.92rem}
 @media (max-width:900px){
   .home,.grid{grid-template-columns:minmax(0,1fr)}
-  .steps,.stages{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .steps,.stages{grid-template-columns:repeat(4,minmax(0,1fr))!important}
 }
 @media (max-width:560px){
   .parties{grid-template-columns:minmax(0,1fr)} .vs{display:none}
-  .msg{max-width:100%} .resp,.two,.principles{grid-template-columns:minmax(0,1fr)}
+  .msg{max-width:100%} .resp,.two,.principles,.tracks,.checks{grid-template-columns:minmax(0,1fr)}
+  .incidents li{grid-template-columns:minmax(0,1fr) auto} .incidents li time{grid-column:1/-1}
   .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 </style>
@@ -192,7 +208,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:12p
 "use strict";
 const $app = document.getElementById("app");
 const S = { db:null, user:null, sample:null, assets:null, downloads:null, uid:null, cases:[], loaded:false, slow:false,
-  view:null, caseId:null, c:null, statements:[], proposals:[], docs:[], pdocs:[], bids:{}, caucus:[], priv:{}, tab:"table",
+  view:null, caseId:null, c:null, statements:[], proposals:[], docs:[], pdocs:[], bids:{}, incidents:[], caucus:[], priv:{}, tab:"table", newTrack:"general", invite:"",
   replyTo:null, busy:"", names:{}, unsub:[], caucusBusy:false, readOnly:false, tone:null, confirm:null, upload:null,
   toneCheck: (()=>{ try { return localStorage.getItem("toneCheck")!=="off"; } catch { return true; } })() };
 
@@ -239,42 +255,71 @@ function sampleErr(e){
 }
 
 /* ---------- ADR process model ---------- */
-const STAGES = [
-  {k:"הסכמה להליך", d:"שני הצדדים מצטרפים וחותמים על כללי ההליך"},
-  {k:"דברי פתיחה", d:"כל צד מציג את הסיפור שלו ומעלה מסמכים"},
-  {k:"סדר יום", d:"הגדרת הסוגיות שצריך להכריע בהן"},
-  {k:"בירור אינטרסים", d:"שאלות המגשר וסיכום הצרכים של כל צד"},
-  {k:"יצירת אפשרויות", d:"הצעות של המגשר ושל הצדדים"},
-  {k:"משא ומתן", d:"תגובות, שיפורים והצעה סגורה בכסף"},
-  {k:"הסכם", d:"טיוטת הסכם גישור"},
-  {k:"חתימה וסיום", d:"אישור שני הצדדים וסגירת התיק"},
-];
+const STAGE_DEFS = {
+  consent:{k:"הסכמה להליך", d:"שני הצדדים מצטרפים ומאשרים את כללי ההליך", done:c=>!!(c.parties?.b&&c.consents?.a&&c.consents?.b)},
+  opening:{k:"דברי פתיחה", d:"כל צד מציג את הסיפור שלו ומעלה מסמכים", done:c=>!!(c.openings?.a&&c.openings?.b)},
+  agenda:{k:"סדר יום", d:"הגדרת הסוגיות שצריך להכריע בהן", done:c=>!!c.issues?.length},
+  interests:{k:"בירור אינטרסים", d:"שאלות המגשר וסיכום הצרכים של כל צד", done:c=>!!c.summary},
+  options:{k:"יצירת אפשרויות", d:"הצעות של המגשר ושל הצדדים", done:c=>!!c.proposalCount},
+  negotiation:{k:"משא ומתן", d:"תגובות, שיפורים, הצעה סגורה ופריסת תשלומים", done:c=>!!c.agreedProposal},
+  agreement:{k:"הסכם", d:"טיוטת הסכם גישור", done:c=>!!c.agreementText},
+  signing:{k:"חתימה וסיום", d:"אישור שני הצדדים וסגירת התיק", done:c=>!!(c.signatures?.a&&c.signatures?.b)},
+};
+const FLOWS = {
+  full:[["consent"],["opening"],["agenda"],["interests"],["options"],["negotiation"],["agreement"],["signing"]],
+  fast:[["consent"],["opening"],["interests","בירור"],["options","הצעות"],["negotiation","הסכמה"],["signing","מסמך וחתימה"]],
+};
+function stagesFor(c){
+  const flow = FLOWS[TRACKS[c?.track||"general"]?.fast ? "fast" : "full"];
+  return flow.map(([key,label])=>({key, ...STAGE_DEFS[key], k:label||STAGE_DEFS[key].k}));
+}
 function stageOf(c){
   if (!c) return 0;
-  if (!c.parties?.b || !c.consents?.a || !c.consents?.b) return 0;
-  if (!c.openings?.a || !c.openings?.b) return 1;
-  if (!c.issues?.length) return 2;
-  if (!c.summary) return 3;
-  if (!c.proposalCount) return 4;
-  if (!c.agreedProposal) return 5;
-  if (!(c.signatures?.a && c.signatures?.b)) return 6;
-  return 7;
+  const st = stagesFor(c); const i = st.findIndex(x=>!x.done(c));
+  return i<0 ? st.length-1 : i;
 }
 function nextStep(c, me){
-  if (!isOpen(c)) return c.status==="settled" ? "התיק הסתיים בהסכם חתום. אפשר להוריד את ההסכם ואת דוח התיק." : "ההליך הסתיים בלי הסכם. אפשר להוריד את דוח התיק ולהעביר אותו למגשר אנושי או לבורר.";
-  const st = stageOf(c);
+  if (!isOpen(c)) return c.status==="settled" ? "התיק הסתיים בהסכם חתום. אפשר להוריד את ההסכם ואת דוח התיק." : "ההליך הסתיים בלי הסכם. אפשר להוריד את דוח התיק ולהעביר אותו למגשר אנושי, או לבדוק את האפשרויות בכרטיס ״אם לא מגיעים להסכמה״.";
   if (!me) return "את/ה צופה בתיק. רק הצדדים יכולים לפעול בו.";
-  switch(st){
-    case 0: return !c.parties?.b ? "מחכים לצד השני. שתפו איתו את הדף (הרשאת Contributor) ובקשו ממנו להצטרף לתיק הזה." : !c.consents?.[me] ? "קראו את כללי ההליך ואשרו אותם." : "מחכים שהצד השני יאשר את כללי ההליך.";
-    case 1: return !c.openings?.[me] ? "כתבו דברי פתיחה בשולחן המשותף. אפשר גם להעלות מסמכים בלשונית ״מסמכים״." : "מחכים לדברי הפתיחה של הצד השני. בינתיים אפשר להעלות מסמכים.";
-    case 2: return "בקשו מהמגשר לבנות סדר יום של הסוגיות, או הוסיפו סוגיות בעצמכם (לשונית ״סדר יום״).";
-    case 3: return "ענו על שאלות המגשר. כשהתמונה מספיק ברורה, בקשו סיכום אינטרסים.";
-    case 4: return "בקשו מהמגשר הצעות להסדר, או הציעו הסדר משלכם.";
-    case 5: return "הגיבו על ההצעות. בסוגיה כספית אפשר לנסות הצעה סגורה.";
-    case 6: return "יש הסכמה. נסחו טיוטת הסכם, קראו אותה, וכל צד מאשר בחתימה.";
-    default: return "";
+  const T = TRACKS[c.track||"general"];
+  switch(stagesFor(c)[stageOf(c)].key){
+    case "consent": return !c.parties?.b ? "מחכים לצד השני. שתפו איתו את הדף (הרשאת Contributor) ובקשו ממנו להצטרף לתיק. אפשר לנסח לו הזמנה בכרטיס של "+sideName(other(me))+"." : !c.consents?.[me] ? "קראו את כללי ההליך ואשרו אותם." : "מחכים שהצד השני יאשר את כללי ההליך.";
+    case "opening": return !c.openings?.[me] ? "כתבו דברי פתיחה בשולחן המשותף."+(T.log?" רשמו ביומן האירועים מקרים ספציפיים.":" אפשר גם להעלות מסמכים.") : "מחכים לדברי הפתיחה של הצד השני. בינתיים אפשר להעלות מסמכים"+(T.log?" ולמלא את יומן האירועים.":".");
+    case "agenda": return "בקשו מהמגשר לבנות סדר יום של הסוגיות, או הוסיפו סוגיות בעצמכם (לשונית ״סדר יום״).";
+    case "interests": return "ענו על שאלות המגשר. כשהתמונה מספיק ברורה, בקשו סיכום אינטרסים.";
+    case "options": return "בקשו מהמגשר הצעות, או הציעו הסדר משלכם."+(T.money?" אם המחלוקת היא על כסף, נסו הצעה סגורה או פריסת תשלומים בלשונית ״כסף״.":"");
+    case "negotiation": return "הגיבו על ההצעות. בסוגיה כספית אפשר לנסות הצעה סגורה או פריסת תשלומים.";
+    case "agreement": return "יש הסכמה. נסחו טיוטת הסכם בלשונית ״הסכם״.";
+    case "signing": return c.agreementText ? "קראו את "+(T.doc||"ההסכם")+" ואשרו אותו בשם מלא." : "יש הסכמה. נסחו את "+(T.doc||"ההסכם")+" בלשונית ״הסכם״ ואשרו אותו.";
   }
+  return "";
 }
+const TRIED = ["דיברתי עם הצד השני","שלחתי הודעה או מכתב","פניתי לוועד הבית","פניתי לעירייה או למשטרה","פניתי לעורך דין","עוד לא עשיתי כלום"];
+const TRACKS = {
+  general:{label:"גישור כללי", short:"כל סוג של מחלוקת"},
+  neighbors:{label:"סכסוך שכנים", short:"רעש, חניה, עישון, רטיבות, שיפוץ, בעלי חיים", topic:"שכנים", fast:true, log:true,
+    subs:["רעש","חניה","עישון וריחות","רטיבות ונזילה","שיפוץ ובנייה","בעלי חיים","רכוש משותף ופסולת","גינה ועצים","אחר"],
+    roles:["למשל: דיירת קומה 3","למשל: דייר קומה 4"], doc:"אמנת השכנות",
+    guide:"מסלול סכסוך שכנים. הצדדים ימשיכו לגור זה ליד זה, ולכן שמירה על היחסים חשובה כמו פתרון הבעיה. התמקד בהתנהגויות מוחשיות ובפתרונות מעשיים: שעות שקט מוסכמות, הודעה מראש לפני שיפוץ או אירוע, פתרונות טכניים (לבד מתחת לרהיטים, שטיח, בידוד, תיקון צנרת), חלוקת עלויות תיקון, הסדר חניה, ערוץ תקשורת קבוע לבעיות חדשות ותקופת ניסיון עם בדיקה משותפת. כשיש יומן אירועים, התבסס עליו ולא על הכללות. אל תקבע קביעות משפטיות (למשל לגבי שעות מנוחה או רעש בלתי סביר). אם זה רלוונטי, אמור שהכללים משתנים בין רשויות ושכדאי לבדוק את חוק העזר העירוני.",
+    agreement:"אמנת שכנות: מסמך קצר ומעשי בשפה פשוטה, לא משפטית. כלול: הצדדים (לפי דירה או תפקיד, עם שדות ריקים לשמות), מה מוסכם בכל נושא (שעות, התנהגות, תיקונים, עלויות ומי משלם), איך מתקשרים כשיש בעיה חדשה (קודם פנייה ישירה ומכבדת, אחר כך הודעה בכתב, ואז חזרה לגישור), תקופת ניסיון של חודש ופגישת בדיקה, וחתימות ותאריך.",
+    info:["שיחה בעזרת ועד הבית או שכן ששניכם סומכים עליו","מרכז גישור קהילתי של הרשות המקומית. בערים רבות השירות ניתן בחינם","תלונה לפיקוח העירוני או למחלקת איכות הסביבה, ברעש, ריחות ומפגעים","המפקח/ת על רישום המקרקעין, בסכסוכים על הרכוש המשותף בבית משותף","תביעה אזרחית, למשל בבית משפט לתביעות קטנות כשנגרם נזק כספי"]},
+  committee:{label:"ועד בית", short:"דמי ועד, תיקונים, החלטות אסיפה, שקיפות", topic:"ועד בית", fast:true, log:true, money:true,
+    subs:["חוב דמי ועד","גובה דמי הוועד","תיקון ברכוש המשותף","החלטת אסיפה","שקיפות וניהול כספים","שימוש ברכוש המשותף","שיפוץ או שדרוג הבניין","אחר"], doc:"ההסכם",
+    guide:"מסלול ועד בית. צד אחד מייצג את ועד הבית, כלומר את כלל בעלי הדירות, והצד השני הוא דייר או בעל דירה. שים לב לפערי מידע וכוח: עודד שקיפות (פירוט הוצאות, פרוטוקולים, הצעות מחיר) ובדוק אם ההחלטה בסמכות הוועד או שהיא דורשת אסיפה כללית. פתרונות נפוצים: פריסת חוב לתשלומים, ויתור על הוצאות גבייה, לוח זמנים לתיקון, הצגת מסמכים, חלוקת עלויות לפי התקנון. אם רלוונטי, ציין שבהיעדר הוראה אחרת בתקנון, הוצאות הרכוש המשותף מתחלקות בדרך כלל לפי שטח הדירה ביחס לשטח כל הדירות, ושכדאי לבדוק את תקנון הבית. אל תפסוק מי צודק.",
+    agreement:"הסכם בין ועד הבית לבין הדייר/ת: הצדדים (עם שדות ריקים לשמות ולמספר הדירה), רקע קצר, ההתחייבויות של כל צד, סכומים ופריסת תשלומים אם יש, לוח זמנים לביצוע עבודות, שקיפות (מה הוועד ימסור ומתי), מה קורה בהפרה (פנייה חוזרת לגישור לפני פנייה למפקח/ת על רישום המקרקעין), וחתימות ותאריך. ציין שהתחייבות שמחייבת את כל בעלי הדירות עשויה לדרוש אישור של אסיפה כללית.",
+    info:["עיון בתקנון הבית המשותף ובפרוטוקולים של האסיפה הכללית","כינוס אסיפה כללית של בעלי הדירות","המפקח/ת על רישום המקרקעין, שמוסמך/ת לדון בסכסוכים בבית משותף, כולל תשלום הוצאות ושימוש ברכוש המשותף","מרכז גישור קהילתי של הרשות המקומית"]},
+  small:{label:"סכסוך קטן", short:"חוב, פיקדון, נזק או עסקה בסכום קטן", topic:"סכסוך קטן", fast:true, money:true,
+    subs:["חוב או הלוואה בין אנשים","מוצר או שירות","נזק לרכב או לרכוש","החזר פיקדון","עבודה שלא שולמה","אחר"],
+    roles:["למשל: המשכירה","למשל: השוכר"], doc:"הסכם הפשרה",
+    guide:"מסלול סכסוך קטן. המטרה היא פתרון מהיר ומעשי, בדרך כלל סביב סכום כסף ומועד תשלום. שאל מעט שאלות ממוקדות: מה סוכם, מה קרה, מה יש בכתב, כמה ומתי. כשיש פער בסכום, הצע פשרה מנומקת או פריסת תשלומים. בבדיקת חלופות ציין שתביעה קטנה היא הליך פשוט יחסית, אבל לוקחת זמן ותוצאתה לא ודאית.",
+    agreement:"הסכם פשרה קצר ופשוט, עד עמוד אחד: הצדדים (עם שדות ריקים לשמות), מה סוכם, הסכום, מועדי התשלום ואמצעי התשלום, מה קורה אם תשלום מתעכב, סילוק טענות הדדי בעניין זה, וחתימות ותאריך.",
+    info:["מכתב דרישה מסודר לפני כל הליך","בית משפט לתביעות קטנות: הליך פשוט יחסית, בדרך כלל בלי עורכי דין, עד תקרת סכום שמתעדכנת מדי שנה","גישור בבית המשפט, אם כבר הוגשה תביעה","בסכסוך צרכני: פנייה לרשות להגנת הצרכן ולסחר הוגן"]},
+};
+const TRACK_ICON = {
+  neighbors:'<svg viewBox="0 0 28 28" aria-hidden="true"><path d="M3 13 9 8l6 5v11H3z" fill="var(--side-a-soft)" stroke="var(--side-a)" stroke-width="1.6"/><path d="M13 13l6-5 6 5v11H13z" fill="var(--side-b-soft)" stroke="var(--side-b)" stroke-width="1.6"/></svg>',
+  committee:'<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="6" y="3" width="16" height="22" rx="1.5" fill="var(--med-soft)" stroke="var(--med)" stroke-width="1.6"/><path d="M10 8h3M15 8h3M10 13h3M15 13h3M10 18h3M15 18h3" stroke="var(--med)" stroke-width="1.6"/></svg>',
+  small:'<svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="10" fill="var(--ok-soft)" stroke="var(--ok)" stroke-width="1.6"/><path d="M10 11h8M10 14h8M14 8v12" stroke="var(--ok)" stroke-width="1.6"/></svg>'};
+function iconEl(k){ const t=document.createElement("template"); t.innerHTML=TRACK_ICON[k]||""; return t.content.firstChild; }
 const MEDIATOR = `אתה מגשר מקצועי, ניטרלי ומנוסה. אתה מנהל הליך גישור לפי הכללים המקובלים של יישוב סכסוכים חלופי (ADR): כללי ההתנהגות המקובלים למגשרים (Model Standards of Conduct for Mediators, AAA/ABA/ACR), הקוד האירופי למגשרים, וחוק המודל של UNCITRAL לגישור. העקרונות שלך:
 1. הכרעה עצמית: הצדדים מחליטים. אתה לא פוסק, לא קובע מי צודק ולא לוחץ להסכם.
 2. ניטרליות והוגנות: יחס שווה לשני הצדדים, באותו טון ובאותה מידת תשומת לב. בלי הטיה לטובת מי שהפעיל אותך.
@@ -299,12 +344,15 @@ function docsContext(list, budget){
   }).join("\n\n");
 }
 function caseContext(c, opts={}){
-  const lines = [];
+  const lines = []; const T = TRACKS[c.track||"general"];
+  if (T.guide) lines.push("הנחיות למסלול: "+T.guide+"\n");
   lines.push(`נושא התיק: ${c.title}${c.topic?` (תחום: ${c.topic})`:""}`);
+  if (c.intake){ const i=c.intake; const parts=[i.since&&"משך הבעיה: "+i.since, i.when&&"מתי ובאיזו תדירות: "+i.when, i.tried?.length&&"מה כבר נוסה: "+i.tried.join(", "), i.goal&&"מה יפתור את זה: "+i.goal, i.rel&&"חשיבות היחסים: "+i.rel].filter(Boolean); if (parts.length) lines.push(`פרטים מטופס הפתיחה של ${sideName(c.openerSide||"a")}: ${parts.join(". ")}`); }
   if (c.amount) lines.push(`סכום שנוי במחלוקת לפי פותח התיק: ${money(c.amount)}`);
   lines.push(`תיאור הסכסוך מפי ${sideName(c.openerSide||"a")}: ${c.description||"—"}`);
   lines.push(`צד א׳: ${c.labels?.a||"לא צוין"}. צד ב׳: ${c.labels?.b||(c.parties?.b?"לא צוין":"טרם הצטרף")}.`);
-  lines.push(`שלב נוכחי בהליך: ${STAGES[stageOf(c)].k}.`);
+  lines.push(`שלב נוכחי בהליך: ${stagesFor(c)[stageOf(c)].k}.`);
+  if (S.incidents.length) lines.push("יומן אירועים:\n"+S.incidents.slice(-40).map(x=>`${sideName(x.side)} · ${x.when.replace("T"," ")}: ${x.what}`).join("\n"));
   if (c.issues?.length) lines.push("סדר היום: " + c.issues.map((i,n)=>`${n+1}. ${i.text} [${issueStatus[i.status]||"פתוח"}]`).join(" | "));
   if (c.summary) lines.push("סיכום ביניים קודם: "+JSON.stringify({a:c.summary.a_interests,b:c.summary.b_interests,common:c.summary.common,gaps:c.summary.gaps}));
   lines.push("\nמסמכים משותפים (שני הצדדים רואים אותם):\n" + docsContext(S.docs, opts.docBudget||24000));
@@ -352,7 +400,7 @@ function route(){
   const id = m ? m[1] : null;
   if (id === S.caseId && S.view) { render(); return; }
   S.unsub.forEach(u=>{try{u()}catch{}}); S.unsub=[];
-  Object.assign(S, {statements:[], proposals:[], docs:[], pdocs:[], bids:{}, caucus:[], priv:{}, replyTo:null, tab:"table", tone:null, confirm:null});
+  Object.assign(S, {statements:[], proposals:[], docs:[], pdocs:[], bids:{}, incidents:[], caucus:[], priv:{}, replyTo:null, tab:"table", tone:null, confirm:null, invite:""});
   if (!id){ S.view="home"; S.caseId=null; S.c=null; render(); window.scrollTo(0,0); return; }
   S.view="case"; S.caseId=id; S.c = S.cases.find(c=>c.id===id) || null;
   if (S.db){
@@ -362,6 +410,7 @@ function route(){
     sub(base.collection("statements").orderBy("createdAt").limit(1000), s => { S.statements = s.docs.map(d=>({id:d.id, ...d.data()})); resolveNames(S.statements.map(x=>x.uid)); render(); });
     sub(base.collection("proposals").orderBy("createdAt").limit(200), s => { S.proposals = s.docs.map(d=>({id:d.id, ...d.data()})); render(); });
     sub(base.collection("docs").orderBy("createdAt").limit(100), s => { S.docs = s.docs.map(d=>({id:d.id, ...d.data()})); render(); });
+    sub(base.collection("incidents").orderBy("when").limit(500), s => { S.incidents = s.docs.map(d=>({id:d.id, ...d.data()})); render(); });
     sub(base.collection("bids"), s => { S.bids = {}; s.docs.forEach(d=>S.bids[d.id]=d.data()); render(); });
     if (S.uid){
       const mine = S.db.collection("data/users/"+S.uid);
@@ -391,9 +440,13 @@ function renderHome(){
   const waiting = S.cases.filter(c => !c.parties?.b && isOpen(c) && !(S.uid && c.parties?.a===S.uid));
   const left = h("section",{class:"stack"},
     h("div",{class:"card stack"},
+      h("h2",{text:"סכסוך עם השכנים, עם ועד הבית, או על סכום קטן?"}),
+      h("p",{class:"muted",text:"מסלולים ייעודיים וקצרים יותר: טופס פתיחה מותאם, יומן אירועים, הצעות מעשיות מהסוג שעובד במקרים כאלה, פריסת תשלומים, ובסוף אמנת שכנות או הסכם פשרה."}),
+      h("div",{class:"tracks"}, ["neighbors","committee","small"].map(k=>h("button",{class:"trackbtn",onclick:()=>pickTrack(k)}, iconEl(k), h("b",{text:TRACKS[k].label}), h("span",{class:"small muted",text:TRACKS[k].short}))))),
+    h("div",{class:"card stack"},
       h("h2",{text:"הליך גישור מלא, בשמונה שלבים"}),
       h("p",{class:"muted"},"ההליך בנוי לפי השלבים המקובלים בגישור מקצועי. מגשר AI ניטרלי מוביל אותו: שואל כל צד שאלות על סמך מה שנאמר ועל סמך המסמכים שהועלו, בונה סדר יום, מסכם אינטרסים, מציע הסדרים ומנסח טיוטת הסכם. ההחלטות נשארות אצלכם."),
-      h("div",{class:"steps"}, STAGES.map((s,i)=>h("div",{class:"step",style:`border-color:${i<2?"var(--side-a)":i<4?"var(--med)":i<6?"var(--side-b)":"var(--ok)"}`},
+      h("div",{class:"steps"}, stagesFor(null).map((s,i)=>h("div",{class:"step",style:`border-color:${i<2?"var(--side-a)":i<4?"var(--med)":i<6?"var(--side-b)":"var(--ok)"}`},
         h("span",{class:"mono",text:String(i+1)}), h("b",{text:s.k}), h("span",{class:"small muted",text:s.d}))))),
     h("div",{class:"card stack"},
       h("h3",{text:"כללי ההליך"}),
@@ -416,12 +469,13 @@ function renderHome(){
       h("div",{class:"caselist"}, waiting.map(caseItem))) : null);
   return h("div",{class:"home"}, left, renderNewCase());
 }
+function pickTrack(k){ S.newTrack=k; render(); const f=document.getElementById("newCase"); f?.scrollIntoView({behavior:"smooth",block:"start"}); setTimeout(()=>document.getElementById("nSub")?.focus({preventScroll:true}),350); }
 const principle = (b, t) => h("li",{}, h("b",{text:b}), h("span",{class:"small muted",text:t}));
 function caseItem(c){
   const st = stageOf(c), me = mySide(c);
-  const status = c.status==="settled" ? ["ok","הסתיים בהסכם"] : c.status==="withdrawn" ? ["bad","הסתיים בלי הסכם"] : ["m", (st+1)+"/8 · "+STAGES[st].k];
+  const status = c.status==="settled" ? ["ok","הסתיים בהסכם"] : c.status==="withdrawn" ? ["bad","הסתיים בלי הסכם"] : ["m", (st+1)+"/"+stagesFor(c).length+" · "+stagesFor(c)[st].k];
   return h("button",{class:"caseitem card", onclick:()=>location.hash="#case-"+c.id},
-    h("span",{class:"t",text:c.title}),
+    h("span",{class:"t"}, c.track&&c.track!=="general"?h("span",{class:"pill",style:"margin-inline-end:6px"},TRACKS[c.track].label):null, c.title),
     h("span",{class:"pill "+status[0]}, status[1]),
     h("span",{class:"small muted"}, `${partyLabel(c,"a")} מול ${c.parties?.b?partyLabel(c,"b"):"ממתין להצטרפות"}`),
     me ? h("span",{class:"pill "+me}, "את/ה "+sideName(me)) : h("span"));
@@ -437,32 +491,55 @@ const TOPICS = {
   "אחר":"תארו את המחלוקת במילים שלכם."};
 function renderNewCase(){
   const dis = !S.db || !S.uid || S.readOnly;
-  return h("section",{class:"card stack", style:"align-self:start"},
+  const tk = S.newTrack, T = TRACKS[tk];
+  const roles = T.roles || ["למשל: המשכירה","למשל: השוכר"];
+  const amountLabel = tk==="committee" ? "סכום החוב או ההוצאה (לא חובה)" : tk==="small" ? "הסכום שבמחלוקת" : tk==="neighbors" ? "נזק כספי, אם יש (לא חובה)" : "סכום שנוי במחלוקת (לא חובה)";
+  return h("section",{class:"card stack", id:"newCase", style:"align-self:start"},
     h("h2",{text:"פתיחת תיק גישור"}),
     dis ? h("div",{class:"notice"}, !S.db||!S.uid ? "כדי לפתוח תיק צריך להיות מחובר/ת ל-claude.ai." : "יש לך הרשאת צפייה בלבד. בקשו מבעל הדף הרשאת Contributor.") : null,
+    h("div",{class:"stack",style:"gap:6px"}, h("span",{class:"label",text:"מסלול"}),
+      h("div",{class:"trackpick"}, Object.entries(TRACKS).map(([k,t])=>h("button",{type:"button","aria-pressed":String(tk===k),onclick:()=>{S.newTrack=k;render();}},t.label)))),
     h("form",{class:"stack", onsubmit:createCase},
-      h("label",{class:"field"},h("span",{text:"כותרת התיק"}),h("input",{id:"nTitle",required:true,maxlength:"120",placeholder:"למשל: החזר פיקדון בסוף שכירות"})),
-      h("label",{class:"field"},h("span",{text:"תחום"}),
-        h("select",{id:"nTopic",onchange:()=>render()}, Object.keys(TOPICS).map(t=>h("option",{text:t}))),
-        h("em",{text:TOPICS[val("nTopic")||"משפחה וגירושין"]})),
-      h("label",{class:"field"},h("span",{text:"מה המחלוקת? (יוצג לשני הצדדים)"}),h("em",{text:"תארו מה קרה, בלי האשמות. את העמדה המלאה שלך תכתוב/י אחר כך בדברי הפתיחה."}),h("textarea",{id:"nDesc",required:true,maxlength:"4000"})),
-      h("div",{class:"two"},
-        h("label",{class:"field"},h("span",{text:"התפקיד שלך"}),h("input",{id:"nRoleA",maxlength:"40",placeholder:"למשל: המשכירה"})),
-        h("label",{class:"field"},h("span",{text:"התפקיד של הצד השני"}),h("input",{id:"nRoleB",maxlength:"40",placeholder:"למשל: השוכר"}))),
-      h("label",{class:"field"},h("span",{text:"סכום שנוי במחלוקת (לא חובה)"}),h("input",{id:"nAmount",type:"number",min:"0",step:"1",inputmode:"numeric",placeholder:"בשקלים"})),
+      h("label",{class:"field"},h("span",{text:"כותרת התיק"}),h("input",{id:"nTitle",required:true,maxlength:"120",placeholder: tk==="neighbors"?"למשל: רעש מהדירה מעל בשעות הלילה":tk==="committee"?"למשל: חוב דמי ועד של דירה 7":"למשל: החזר פיקדון בסוף שכירות"})),
+      tk==="general" ? h("label",{class:"field"},h("span",{text:"תחום"}),
+          h("select",{id:"nTopic",onchange:()=>render()}, Object.keys(TOPICS).map(t=>h("option",{text:t}))),
+          h("em",{text:TOPICS[val("nTopic")||"משפחה וגירושין"]}))
+        : h("label",{class:"field"},h("span",{text:"על מה המחלוקת?"}),h("select",{id:"nSub"}, T.subs.map(t=>h("option",{text:t})))),
+      h("label",{class:"field"},h("span",{text:"מה קרה? (יוצג לשני הצדדים)"}),h("em",{text:"תארו מה קרה, בלי האשמות. את העמדה המלאה תכתבו אחר כך בדברי הפתיחה."}),h("textarea",{id:"nDesc",required:true,maxlength:"4000"})),
+      tk==="committee"
+        ? h("div",{class:"two"},
+            h("label",{class:"field"},h("span",{text:"מי את/ה בסכסוך?"}),h("select",{id:"nComRole"},h("option",{value:"committee",text:"אני מטעם ועד הבית"}),h("option",{value:"tenant",text:"אני דייר/ת או בעל/ת דירה"}))),
+            h("label",{class:"field"},h("span",{text:"מספר הדירה של הדייר/ת (לא חובה)"}),h("input",{id:"nApt",maxlength:"10"})))
+        : h("div",{class:"two"},
+            h("label",{class:"field"},h("span",{text:"התפקיד שלך"}),h("input",{id:"nRoleA",maxlength:"40",placeholder:roles[0]})),
+            h("label",{class:"field"},h("span",{text:"התפקיד של הצד השני"}),h("input",{id:"nRoleB",maxlength:"40",placeholder:roles[1]}))),
+      tk!=="general" ? h("div",{class:"stack",style:"gap:12px;padding:12px;background:var(--sunk);border-radius:var(--r)"},
+        h("b",{text:"כמה פרטים שיעזרו למגשר (יוצגו לשני הצדדים)"}),
+        h("div",{class:"two"},
+          h("label",{class:"field"},h("span",{text:"ממתי זה נמשך?"}),h("select",{id:"nSince"}, ["","פחות מחודש","חודש עד חצי שנה","חצי שנה עד שנה","יותר משנה"].map(t=>h("option",{value:t,text:t||"לא צוין"})))),
+          tk!=="small" ? h("label",{class:"field"},h("span",{text:"כמה חשוב לך לשמור על יחסים טובים?"}),h("select",{id:"nRel"}, ["","חשוב מאוד","במידה","פחות חשוב"].map(t=>h("option",{value:t,text:t||"לא צוין"})))) : h("span")),
+        tk==="neighbors" ? h("label",{class:"field"},h("span",{text:"מתי ובאיזו תדירות זה קורה?"}),h("input",{id:"nWhen",maxlength:"160",placeholder:"למשל: כמעט כל לילה, בין 23:00 ל-01:00"})) : null,
+        h("div",{class:"field"},h("span",{text:"מה כבר ניסית?"}),h("div",{class:"checks"}, TRIED.map((t,i)=>h("label",{class:"check small"},h("input",{type:"checkbox",id:"nTried"+i}),h("span",{text:t}))))),
+        h("label",{class:"field"},h("span",{text:"מה היה פותר את זה מבחינתך?"}),h("input",{id:"nGoal",maxlength:"240"}))) : null,
+      h("label",{class:"field"},h("span",{text:amountLabel}),h("input",{id:"nAmount",type:"number",min:"0",step:"1",inputmode:"numeric",placeholder:"בשקלים",required:tk==="small"})),
       h("button",{class:"primary",type:"submit",disabled:dis||S.busy==="create"}, S.busy==="create"?"פותח…":"פתיחת התיק")),
     h("p",{class:"small muted"},"כל מי שיש לו גישה לדף הזה רואה את רשימת התיקים ואת השולחן המשותף שלהם. החדר הפרטי והמסמכים החסויים של כל צד נשארים אצלו בלבד. כדי להזמין את הצד השני, שתפו איתו את הדף בהרשאת Contributor."));
 }
 async function createCase(ev){
   ev.preventDefault();
   const title = val("nTitle"), desc = val("nDesc"); if (!title || !desc) return;
+  const tk = S.newTrack, T = TRACKS[tk];
   S.busy="create"; render();
   try {
     const ref = S.db.collection("cases").doc();
     const amount = Number(val("nAmount")) || 0;
-    await ref.set({ title, description:desc, topic:val("nTopic"), amount, createdAt:Date.now(), createdBy:S.uid,
-      openerSide:"a", parties:{a:S.uid}, labels:{a:val("nRoleA"), b:val("nRoleB")}, status:"open", consents:{}, openings:{}, issues:[], proposalCount:0 });
-    ["nTitle","nDesc","nRoleA","nRoleB","nAmount"].forEach(id=>setVal(id,""));
+    let labels = {a:val("nRoleA"), b:val("nRoleB")};
+    if (tk==="committee"){ const apt = val("nApt"); const tenant = "דייר/ת"+(apt?` דירה ${apt}`:""); labels = val("nComRole")==="tenant" ? {a:tenant, b:"ועד הבית"} : {a:"ועד הבית", b:tenant}; }
+    const sub = tk==="general" ? "" : val("nSub");
+    const intake = tk==="general" ? null : {since:val("nSince"), rel:val("nRel"), when:val("nWhen"), goal:val("nGoal"), tried:TRIED.filter((t,i)=>document.getElementById("nTried"+i)?.checked)};
+    await ref.set({ title, description:desc, track:tk, subtopic:sub, intake, topic: tk==="general" ? val("nTopic") : T.topic+(sub?" · "+sub:""), amount, createdAt:Date.now(), createdBy:S.uid,
+      openerSide:"a", parties:{a:S.uid}, labels, status:"open", consents:{}, openings:{}, issues:[], proposalCount:0 });
+    ["nTitle","nDesc","nRoleA","nRoleB","nAmount","nApt","nWhen","nGoal"].forEach(id=>setVal(id,""));
     S.busy=""; location.hash = "#case-"+ref.id; toast("התיק נפתח");
   } catch(e){ S.busy=""; render(); toast(e.code==="quota_exceeded"?"אין מקום לתיקים נוספים":"פתיחת התיק נכשלה. נסו שוב."); }
 }
@@ -476,21 +553,22 @@ function renderCase(){
     h("div",{class:"stack",style:"gap:4px"},
       h("a",{href:"#",class:"small",text:"→ כל התיקים"}),
       h("h2",{style:"font-size:1.5rem",text:c.title}),
-      h("span",{class:"small muted"}, [c.topic, c.amount?"סכום במחלוקת: "+money(c.amount):null, "נפתח "+fmt(c.createdAt), "קוד "+c.id.slice(0,8)].filter(Boolean).join(" · "))),
-    h("div",{class:"stages",role:"list","aria-label":"שלבי ההליך"}, STAGES.map((s,i)=>h("div",{role:"listitem",title:s.d,class:i<st||c.status==="settled"?"done":i===st&&isOpen(c)?"now":""}, `${i+1}. ${s.k}`))),
+      h("span",{class:"small muted"}, [c.track&&c.track!=="general"?"מסלול "+TRACKS[c.track].label:null, c.topic, c.amount?"סכום במחלוקת: "+money(c.amount):null, "נפתח "+fmt(c.createdAt), "קוד "+c.id.slice(0,8)].filter(Boolean).join(" · "))),
+    h("div",{class:"stages",role:"list","aria-label":"שלבי ההליך",style:`grid-template-columns:repeat(${stagesFor(c).length},minmax(0,1fr))`}, stagesFor(c).map((s,i)=>h("div",{role:"listitem",title:s.d,class:i<st||c.status==="settled"?"done":i===st&&isOpen(c)?"now":""}, `${i+1}. ${s.k}`))),
     h("div",{class:"nextstep"}, h("span",{class:"k",text:isOpen(c)?"הצעד הבא":"סטטוס"}), h("span",{text:nextStep(c,me)})),
     h("div",{class:"parties"}, partyCard(c,"a",me), h("span",{class:"vs",text:"מול"}), partyCard(c,"b",me)));
 
   if (me && isOpen(c) && !c.consents?.[me]) return h("div",{}, head, renderConsent(c, me));
 
   const tabs = [["table","שולחן משותף",S.statements.length],["docs","מסמכים",S.docs.length+S.pdocs.length],["agenda","סדר יום",c.issues?.length],["summary","סיכום",0],["proposals","הצעות",S.proposals.length]];
-  if (c.parties?.b) tabs.push(["money","הצעה סגורה",0]);
+  if (TRACKS[c.track||"general"].log || S.incidents.length) tabs.splice(1,0,["log","יומן אירועים",S.incidents.length]);
+  if (c.parties?.b) tabs.push(["money","כסף",0]);
   if (c.agreedProposal) tabs.push(["agreement","הסכם",0]);
-  const body = {table:renderTable, docs:renderDocs, agenda:renderAgenda, summary:renderSummary, proposals:renderProposals, money:renderMoney, agreement:renderAgreement}[S.tab] || renderTable;
+  const body = {table:renderTable, docs:renderDocs, agenda:renderAgenda, summary:renderSummary, proposals:renderProposals, money:renderMoney, log:renderIncidents, agreement:renderAgreement}[S.tab] || renderTable;
   const main = h("section",{class:"card"},
     h("div",{class:"tabs",role:"tablist"}, tabs.map(([id,l,n])=>h("button",{role:"tab","aria-selected":String(S.tab===id), onclick:()=>{S.tab=id; S.tone=null; render();}}, l+(n?` (${n})`:"")))),
     body(c, me));
-  const side = h("aside",{class:"side"}, renderMediatorPanel(c,me), renderCaucus(c,me), renderMeeting(c,me), renderClosure(c,me));
+  const side = h("aside",{class:"side"}, renderMediatorPanel(c,me), renderCaucus(c,me), renderMeeting(c,me), renderTrackInfo(c), renderClosure(c,me));
   return h("div",{}, head, h("div",{class:"grid"}, main, side));
 }
 function partyCard(c, s, me){
@@ -504,7 +582,24 @@ function partyCard(c, s, me){
       h("p",{class:"small",text:"הוזמנת לגישור הזה? הצטרפ/י כאן. אחרי ההצטרפות תתבקש/י לאשר את כללי ההליך."}),
       h("input",{id:"joinRole",maxlength:"40",placeholder:"התפקיד שלך"+(c.labels?.[s]?` (הוצע: ${c.labels[s]})`:"")}),
       h("button",{class:"primary",onclick:()=>joinCase(s),disabled:S.busy==="join"}, S.busy==="join"?"מצטרף…":"הצטרפות כ"+sideName(s)))
-    : h("p",{class:"small muted",text: me ? "שתפו את הדף עם הצד השני (הרשאת Contributor) ובקשו ממנו לבחור בתיק הזה." : "רק משתמש מחובר עם הרשאת Contributor יכול להצטרף."}));
+    : me ? h("div",{class:"stack",style:"gap:6px;margin-top:6px"},
+        h("p",{class:"small muted",text:"שתפו את הדף עם הצד השני (הרשאת Contributor) ובקשו ממנו לבחור בתיק הזה."}),
+        S.invite ? h("div",{class:"invite",id:"inviteText",text:S.invite}) : null,
+        h("div",{class:"row"},
+          h("button",{class:"small",onclick:makeInvite,disabled:S.busy==="invite"}, S.busy==="invite"?[h("span",{class:"spin"})," מנסח…"]:S.invite?"ניסוח אחר":"נסח לי הודעת הזמנה"),
+          S.invite ? h("button",{class:"ghost small",onclick:()=>navigator.clipboard.writeText(S.invite).then(()=>toast("ההזמנה הועתקה")).catch(()=>toast("סמנו והעתיקו ידנית"))},"העתקה") : null))
+    : h("p",{class:"small muted",text:"רק משתמש מחובר עם הרשאת Contributor יכול להצטרף."}));
+}
+async function makeInvite(){
+  const c = S.c, T = TRACKS[c.track||"general"];
+  const fallback = `שלום,\nאני רוצה לנסות לפתור יחד את העניין של "${c.title}" בגישור מקוון, בלי עורכי דין ובלי בית משפט. מגשר ניטרלי (בינה מלאכותית) עוזר לשנינו להבין מה חשוב לכל אחד ולהציע פתרונות. ההשתתפות מרצון, ואפשר להפסיק בכל שלב.\nשלחתי לך גישה לדף. כדי להצטרף, פתח/י אותו ובחר/י בתיק "${c.title}".\nתודה`;
+  if (!S.sample){ S.invite = fallback; render(); return; }
+  S.busy="invite"; render();
+  try {
+    const r = await S.sample(`נסח הודעת הזמנה קצרה (עד 90 מילים), חמה ולא מאשימה, ש${c.labels?.a||"צד א׳"} ישלח ל${c.labels?.b||"הצד השני"} כדי להזמין אותו לגישור מקוון בנושא "${c.title}"${T.topic?` (${T.label})`:""}. הדגש שזה מרצון, שהמגשר ניטרלי ושהמטרה פתרון שמתאים לשניהם${c.track==="neighbors"||c.track==="committee"?" ושמירה על יחסי שכנות טובים":""}. סיים בהסבר: "שלחתי לך גישה לדף. פתח/י אותו ובחר/י בתיק \"${c.title}\"." בלי כותרת, בלי חתימה עם שם. החזר רק את נוסח ההודעה.`, {modelTier:"quick"});
+    S.invite = r.text.trim();
+  } catch { S.invite = fallback; }
+  S.busy=""; render();
 }
 async function joinCase(s){
   const ref = S.db.doc("cases/"+S.caseId);
@@ -912,8 +1007,74 @@ function aiRevise(p){
   });
 }
 
-/* ---------- blind offers (sealed bids) ---------- */
+/* ---------- incident log ---------- */
+function renderIncidents(c, me){
+  const wrap = h("div",{class:"stack"},
+    h("p",{class:"small muted",text:"רשמו כאן מקרים ספציפיים: מתי, מה קרה וכמה זמן זה נמשך. תיעוד עובדתי עוזר לדבר על מה שקרה, ולא על מי אשם. שני הצדדים רואים את היומן, והמגשר משתמש בו."}));
+  if (me && isOpen(c)) wrap.append(h("form",{class:"stack",style:"gap:8px",onsubmit:addIncident},
+    h("div",{class:"two"},
+      h("label",{class:"field"},h("span",{text:"מתי"}),h("input",{id:"incWhen",type:"datetime-local",required:true})),
+      h("label",{class:"field"},h("span",{text:"מה קרה"}),h("input",{id:"incWhat",required:true,maxlength:"300",placeholder:"למשל: מוזיקה חזקה כשעה וחצי"}))),
+    h("div",{},h("button",{type:"submit"},"הוספה ליומן"))));
+  if (!S.incidents.length){ wrap.append(h("div",{class:"empty",text:"היומן ריק."})); return wrap; }
+  wrap.append(h("ul",{class:"incidents"}, [...S.incidents].reverse().map(x=>h("li",{},
+    h("time",{text:fmt(new Date(x.when).getTime())}),
+    h("span",{}, h("span",{class:"pill "+x.side,style:"margin-inline-end:6px"},sideName(x.side)), x.what),
+    x.uid===S.uid && isOpen(c) ? h("button",{class:"ghost small",onclick:()=>S.db.doc(`cases/${S.caseId}/incidents/${x.id}`).delete().catch(()=>toast("המחיקה נכשלה"))},"מחיקה") : h("span")))));
+  return wrap;
+}
+async function addIncident(ev){
+  ev.preventDefault();
+  const when = val("incWhen"), what = val("incWhat"); if (!when || !what) return;
+  try { await S.db.collection(`cases/${S.caseId}/incidents`).add({when, what, side:mySide(S.c), uid:S.uid, createdAt:Date.now()}); setVal("incWhat",""); } catch { toast("השמירה נכשלה"); }
+}
+
+/* ---------- money: sealed offers + payment plan ---------- */
 function renderMoney(c, me){
+  return h("div",{class:"stack"}, h("h3",{text:"הצעה סגורה"}), renderSealed(c, me), h("hr",{style:"border:0;border-top:1px solid var(--line);width:100%"}), renderPlan(c, me));
+}
+function planRows(total, n, start){
+  if (!(total>0) || !(n>=1) || !start) return [];
+  const each = Math.floor(total/n), rows=[]; const d0 = new Date(start+"T12:00:00");
+  for (let i=0;i<n;i++){ const d=new Date(d0); d.setMonth(d0.getMonth()+i); rows.push({date:d.toLocaleDateString("he-IL"), amount: i===n-1 ? total-each*(n-1) : each}); }
+  return rows;
+}
+function renderPlan(c, me){
+  const total = Math.round(Number(val("plTotal")) || c.amount || 0), n = Math.min(36, Math.max(1, Math.round(Number(val("plCount"))||1)));
+  const start = val("plStart"), payer = val("plPayer") || c.money?.payer || "a";
+  const rows = planRows(total, n, start);
+  return h("div",{class:"stack"},
+    h("h3",{text:"פריסת תשלומים"}),
+    h("p",{class:"small muted",text:"כשמסכימים על סכום אבל קשה לשלם אותו בבת אחת, למשל בחוב דמי ועד. בנו לוח תשלומים והוסיפו אותו כהצעה שהצד השני יכול לאשר."}),
+    me && isOpen(c) ? h("div",{class:"stack",style:"gap:10px"},
+      h("div",{class:"two"},
+        h("label",{class:"field"},h("span",{text:"מי משלם"}),h("select",{id:"plPayer",onchange:()=>render()}, ["a","b"].map(s=>h("option",{value:s,selected:payer===s,text:partyLabel(c,s)})))),
+        h("label",{class:"field"},h("span",{text:"סכום כולל (₪)"}),h("input",{id:"plTotal",type:"number",min:"1",step:"1",inputmode:"numeric",value:c.amount?String(c.amount):null,oninput:()=>render()}))),
+      h("div",{class:"two"},
+        h("label",{class:"field"},h("span",{text:"מספר תשלומים חודשיים"}),h("input",{id:"plCount",type:"number",min:"1",max:"36",step:"1",value:"6",oninput:()=>render()})),
+        h("label",{class:"field"},h("span",{text:"תאריך התשלום הראשון"}),h("input",{id:"plStart",type:"date",oninput:()=>render()}))),
+      rows.length ? h("div",{class:"notice"}, h("b",{text:`${rows.length} תשלומים, ${money(total)} בסך הכול`}), h("ol",{class:"plan"}, rows.map(r=>h("li",{text:`${r.date}: ${money(r.amount)}`})))) : h("p",{class:"small muted",text:"מלאו סכום ותאריך כדי לראות את הלוח."}),
+      h("div",{},h("button",{class:"primary",disabled:!rows.length,onclick:()=>planToProposal(c,payer,total,rows)},"הוספה כהצעה להסדר"))) : null);
+}
+async function planToProposal(c, payer, total, rows){
+  const who = c.labels?.[payer] || sideName(payer), to = c.labels?.[other(payer)] || sideName(other(payer));
+  const terms = [`${who} ישלם/תשלם ל${to} סך ${money(total)} ב-${rows.length} תשלומים חודשיים.`];
+  if (rows.length<=12) rows.forEach((r,i)=>terms.push(`תשלום ${i+1}: ${money(r.amount)} עד ${r.date}.`));
+  else terms.push(`התשלום הראשון עד ${rows[0].date} והאחרון עד ${rows[rows.length-1].date}, ${money(rows[0].amount)} בכל חודש.`);
+  terms.push("אם תשלום מתעכב ביותר מ-14 יום, הצדדים יחזרו לגישור לפני כל צעד אחר.");
+  try { await addProposals([{title:`פריסת תשלומים: ${money(total)} ב-${rows.length} תשלומים`, terms}], mySide(c), null); S.tab="proposals"; render(); toast("ההצעה נוספה"); } catch { toast("השמירה נכשלה"); }
+}
+function renderTrackInfo(c){
+  const T = TRACKS[c.track||"general"]; if (!T.info) return null;
+  return h("div",{class:"card stack"},
+    h("h3",{text:"אם לא מגיעים להסכמה"}),
+    h("p",{class:"small muted",text:"אלה אפשרויות נפוצות ב"+T.label.replace("סכסוך ","סכסוכי ")+". כדאי להכיר אותן כשבודקים את החלופות להסכם."}),
+    h("ul",{class:"info"}, T.info.map(t=>h("li",{text:t}))),
+    h("p",{class:"small muted",text:"זה מידע כללי, לא ייעוץ משפטי. הכללים משתנים, ולכן בדקו מה עדכני לגבי המקרה שלכם."}));
+}
+
+/* ---------- blind offers (sealed bids) ---------- */
+function renderSealed(c, me){
   const m = c.money || {}; const round = m.round || 1; const results = m.results || {};
   const wrap = h("div",{class:"stack"},
     h("p",{class:"muted",text:"הצעה סגורה מתאימה לסוגיה של סכום כסף. כל צד מגיש בסתר את הסכום שהוא מוכן לקבל או לשלם. אם הסכומים חופפים, הסכום המוסכם הוא בדיוק האמצע ביניהם. אם לא, אף צד לא רואה את הסכום של השני, ורק נאמר לכם כמה רחוקים אתם. אפשר עד 5 סבבים."}),
@@ -1004,7 +1165,7 @@ function renderAgreement(c, me){
     h("div",{class:"notice ok"}, "שני הצדדים הסכימו להצעה #"+(p?.n||"")+": "+(p?.title||"")+". זו טיוטה. לפני חתימה מומלץ שכל צד יתייעץ עם עורך דין."),
     c.agreementText ? h("div",{class:"agreement",id:"agreementText",text:c.agreementText}) : h("div",{class:"empty"},"עוד לא נוסחה טיוטת הסכם."),
     h("div",{class:"row"},
-      me && S.sample && isOpen(c) && !anySig ? h("button",{class:"primary",onclick:aiAgreement,disabled:S.busy.startsWith("ai")}, S.busy==="ai-agr"?[h("span",{class:"spin"})," מנסח…"]: c.agreementText?"ניסוח מחדש":"ניסוח טיוטת הסכם גישור") : null,
+      me && S.sample && isOpen(c) && !anySig ? h("button",{class:"primary",onclick:aiAgreement,disabled:S.busy.startsWith("ai")}, S.busy==="ai-agr"?[h("span",{class:"spin"})," מנסח…"]: c.agreementText?"ניסוח מחדש":"ניסוח "+(TRACKS[c.track||"general"].doc ? TRACKS[c.track].doc.replace(/^ה/,"") : "טיוטת הסכם גישור")) : null,
       c.agreementText ? h("button",{onclick:copyAgreement},"העתקת הטקסט") : null,
       c.agreementText && S.downloads ? h("button",{onclick:()=>save("הסכם-גישור.txt", c.agreementText)},"הורדת ההסכם") : null),
     c.agreementText ? h("div",{class:"card stack"},
@@ -1029,7 +1190,8 @@ async function sign(ev){
 function aiAgreement(){
   return withLock("agr", async () => {
     const p = S.proposals.find(x=>x.id===S.c.agreedProposal);
-    const r = await S.sample(`${MEDIATOR}\n\n${caseContext(S.c,{docBudget:12000})}\n\nמשימה: שני הצדדים הסכימו להצעה ${p.n} ("${p.title}"). נסח טיוטת הסכם גישור בעברית לפי המבנה המקובל: כותרת; הצדדים (לפי תפקידיהם, עם שדות ריקים "____" לשם ולמספר זהות, בלי להמציא פרטים); מבוא (הואיל ו...) שמתאר את הסכסוך ואת ההליך; סעיפים ממוספרים לפי תנאי ההצעה וההערות שהתקבלו, כולל מועדים וסכומים; לוח זמנים לביצוע; סעיף סילוק טענות הדדי בעניין זה; סודיות; מנגנון ליישוב מחלוקות עתידיות (פנייה חוזרת לגישור לפני הליך משפטי); הסכמה לבקש מבית משפט לתת להסכם תוקף, אם הצדדים ירצו; ושורות חתימה ותאריך. טקסט רגיל, בלי Markdown.`, {modelTier:"complex"});
+    const T = TRACKS[S.c.track||"general"];
+    const r = await S.sample(T.agreement ? `${MEDIATOR}\n\n${caseContext(S.c,{docBudget:12000})}\n\nמשימה: שני הצדדים הסכימו להצעה ${p.n} ("${p.title}"). נסח ${T.agreement} שלב את תנאי ההצעה וההערות שהתקבלו, עם מועדים וסכומים. אל תמציא פרטים. טקסט רגיל, בלי Markdown.` : `${MEDIATOR}\n\n${caseContext(S.c,{docBudget:12000})}\n\nמשימה: שני הצדדים הסכימו להצעה ${p.n} ("${p.title}"). נסח טיוטת הסכם גישור בעברית לפי המבנה המקובל: כותרת; הצדדים (לפי תפקידיהם, עם שדות ריקים "____" לשם ולמספר זהות, בלי להמציא פרטים); מבוא (הואיל ו...) שמתאר את הסכסוך ואת ההליך; סעיפים ממוספרים לפי תנאי ההצעה וההערות שהתקבלו, כולל מועדים וסכומים; לוח זמנים לביצוע; סעיף סילוק טענות הדדי בעניין זה; סודיות; מנגנון ליישוב מחלוקות עתידיות (פנייה חוזרת לגישור לפני הליך משפטי); הסכמה לבקש מבית משפט לתת להסכם תוקף, אם הצדדים ירצו; ושורות חתימה ותאריך. טקסט רגיל, בלי Markdown.`, {modelTier:"complex"});
     await S.db.doc("cases/"+S.caseId).update({agreementText:r.text.slice(0,30000)});
     toast("טיוטת ההסכם מוכנה");
   });
@@ -1148,10 +1310,11 @@ function renderFeedback(c, me){
 function caseReport(c){
   const L = [];
   L.push(`# דוח תיק גישור: ${c.title}`, "");
-  L.push(`- קוד תיק: ${c.id}`, `- תחום: ${c.topic||"—"}`, `- נפתח: ${fmt(c.createdAt)}`, `- צד א׳: ${partyLabel(c,"a")}`, `- צד ב׳: ${c.parties?.b?partyLabel(c,"b"):"לא הצטרף"}`, `- שלב: ${STAGES[stageOf(c)].k}`, `- סטטוס: ${({open:"פתוח",settled:"הסתיים בהסכם",withdrawn:"הסתיים בלי הסכם"})[c.status||"open"]}`);
+  L.push(`- קוד תיק: ${c.id}`, `- תחום: ${c.topic||"—"}`, `- נפתח: ${fmt(c.createdAt)}`, `- צד א׳: ${partyLabel(c,"a")}`, `- צד ב׳: ${c.parties?.b?partyLabel(c,"b"):"לא הצטרף"}`, `- מסלול: ${TRACKS[c.track||"general"].label}`, `- שלב: ${stagesFor(c)[stageOf(c)].k}`, `- סטטוס: ${({open:"פתוח",settled:"הסתיים בהסכם",withdrawn:"הסתיים בלי הסכם"})[c.status||"open"]}`);
   if (c.amount) L.push(`- סכום שנוי במחלוקת: ${money(c.amount)}`);
   for (const s of ["a","b"]) if (c.consents?.[s]) L.push(`- ${sideName(s)} אישר/ה את כללי ההליך: ${fmt(c.consents[s].at)}`);
   L.push("", "## תיאור הסכסוך", c.description||"");
+  if (S.incidents.length){ L.push("", "## יומן אירועים"); S.incidents.forEach(x=>L.push(`- ${x.when.replace("T"," ")} · ${sideName(x.side)}: ${x.what}`)); }
   if (c.issues?.length){ L.push("", "## סדר יום"); c.issues.forEach((i,n)=>L.push(`${n+1}. ${i.text} (${issueStatus[i.status]||"פתוח"})`)); }
   if (c.summary){ const s=c.summary; L.push("", "## סיכום המגשר", s.overview, "", "### "+partyLabel(c,"a"), ...(s.a_interests||[]).map(x=>"- "+x), "", "### "+partyLabel(c,"b"), ...(s.b_interests||[]).map(x=>"- "+x), "", "### נקודות הסכמה", ...(s.common||[]).map(x=>"- "+x), "", "### פערים", ...(s.gaps||[]).map(x=>"- "+x)); }
   if (S.docs.length){ L.push("", "## מסמכים משותפים"); S.docs.forEach(d=>L.push(`- ${d.name} (${sideName(d.side)}): ${d.summary||""}`)); }
