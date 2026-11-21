@@ -8,9 +8,9 @@
   --bg:#f3f5f6; --surface:#ffffff; --sunk:#e8ecee; --line:#d3dade;
   --fg:#18232b; --muted:#5b6872;
   --side-a:#1f6f8b; --side-a-soft:#dcedf3;
-  --side-b:#b35c1e; --side-b-soft:#f6e6d9;
+  --side-b:#9c4d15; --side-b-soft:#f6e6d9;
   --med:#4a4f9c; --med-soft:#e6e7f5; --on-med:#ffffff;
-  --ok:#2d7a4b; --ok-soft:#dcefe3; --warn:#9a6b00; --warn-soft:#f7edd3; --bad:#a83a3a; --bad-soft:#f5e0e0;
+  --ok:#25683f; --ok-soft:#dcefe3; --warn:#865c00; --warn-soft:#f7edd3; --bad:#a83a3a; --bad-soft:#f5e0e0;
   --display:"Rubik","Assistant",system-ui,sans-serif;
   --body:"Assistant","Rubik",system-ui,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,monospace;
@@ -46,6 +46,10 @@ button.danger{border-color:var(--bad);color:var(--bad)}
 button.ghost{background:transparent;border-color:transparent;padding:6px 8px;color:var(--muted)}
 button.ghost:hover:not(:disabled){color:var(--fg);border-color:var(--line)}
 :focus-visible{outline:2px solid var(--med);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip{position:absolute;inset-inline-start:16px;top:-60px;z-index:30;background:var(--surface);border:2px solid var(--med);border-radius:8px;padding:8px 14px;font-weight:700}
+.skip:focus{top:12px}
+#app:focus{outline:none}
 input,textarea,select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
 input[type=checkbox],input[type=radio]{width:auto}
 textarea{resize:vertical;min-height:84px}
@@ -192,6 +196,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:12p
 }
 </style>
 
+<a class="skip" href="#app" id="skipLink">דילוג לתוכן הראשי</a>
 <div class="wrap">
   <header class="top">
     <a class="brand" href="#" id="homeLink">
@@ -205,14 +210,17 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:12p
     </a>
     <span id="who" class="small muted"></span>
   </header>
-  <main id="app"><div class="notice">טוען את תיקי הגישור…</div></main>
+  <main id="app" tabindex="-1"><div class="notice">טוען את תיקי הגישור…</div></main>
 </div>
-<div id="toast" class="toast" hidden></div>
+<div id="toast" class="toast" hidden aria-hidden="true"></div>
+<div id="live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
 (() => {
 "use strict";
 const $app = document.getElementById("app");
+document.documentElement.lang = "he"; document.documentElement.dir = "rtl";
+document.getElementById("skipLink")?.addEventListener("click", e => { e.preventDefault(); $app.focus(); });
 const S = { db:null, user:null, sample:null, assets:null, downloads:null, uid:null, cases:[], loaded:false, slow:false,
   view:null, caseId:null, c:null, statements:[], proposals:[], docs:[], pdocs:[], bids:{}, incidents:[], caucus:[], priv:{}, iv:{}, ivBusy:false, tab:"table", newTrack:"general", invite:"",
   replyTo:null, busy:"", names:{}, unsub:[], caucusBusy:false, readOnly:false, tone:null, confirm:null, upload:null,
@@ -231,7 +239,8 @@ function h(tag, attrs, ...kids){
   for (const kid of kids.flat()){ if (kid==null||kid===false) continue; el.append(kid.nodeType?kid:document.createTextNode(String(kid))); }
   return el;
 }
-function toast(t){ const el=document.getElementById("toast"); el.textContent=t; el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>el.hidden=true,3600); }
+function announce(t){ const lv=document.getElementById("live"); if (!lv) return; lv.textContent=""; setTimeout(()=>{ lv.textContent=t; }, 50); }
+function toast(t){ announce(t); const el=document.getElementById("toast"); el.textContent=t; el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>el.hidden=true,3600); }
 const fmt = ms => { try { return new Date(ms).toLocaleString("he-IL",{day:"numeric",month:"numeric",year:"2-digit",hour:"2-digit",minute:"2-digit"}); } catch { return ""; } };
 const money = n => { try { return new Intl.NumberFormat("he-IL",{style:"currency",currency:"ILS",maximumFractionDigits:0}).format(n); } catch { return n+" ₪"; } };
 const sideName = s => s==="a" ? "צד א׳" : s==="b" ? "צד ב׳" : "המגשר";
@@ -431,14 +440,17 @@ function route(){
 
 /* ---------- render ---------- */
 function render(){
-  const ae = document.activeElement; const keepId = ae && ae.id; const sel = keepId && ae.selectionStart!=null ? [ae.selectionStart, ae.selectionEnd] : null;
+  const ae = document.activeElement; const keepId = ae && ae.id;
+  let fkey = null; if (ae && !keepId && ae!==$app && $app.contains(ae)){ const k=focusKey(ae), tag=ae.tagName.toLowerCase(); fkey={tag, k, i:[...$app.querySelectorAll(tag)].filter(e=>focusKey(e)===k).indexOf(ae)}; } const sel = keepId && ae.selectionStart!=null ? [ae.selectionStart, ae.selectionEnd] : null;
   const drafts = {}; $app.querySelectorAll("textarea[id],input[id],select[id]").forEach(el=>{ if (el.type==="file") return; drafts[el.id] = (el.type==="checkbox"||el.type==="radio") ? {c:el.checked} : {v:el.value}; });
   const cl0 = document.getElementById("caucusLog"); const atBottom = !cl0 || cl0.scrollHeight - cl0.scrollTop - cl0.clientHeight < 40;
   $app.replaceChildren(S.view==="case" ? renderCase() : renderHome());
   for (const [id,d] of Object.entries(drafts)){ const el=document.getElementById(id); if (!el || el.type==="file") continue; if ("c" in d) el.checked=d.c; else el.value=d.v; }
   if (keepId){ const el=document.getElementById(keepId); if (el){ el.focus({preventScroll:true}); if (sel && el.setSelectionRange) try{el.setSelectionRange(...sel)}catch{} } }
+  else if (fkey){ const same=[...$app.querySelectorAll(fkey.tag)].filter(e=>focusKey(e)===fkey.k); const el=same[fkey.i]||same[0]; if (el) el.focus({preventScroll:true}); }
   const cl = document.getElementById("caucusLog"); if (cl && atBottom) cl.scrollTop = cl.scrollHeight;
 }
+function focusKey(e){ return [e.getAttribute("role")||"", e.getAttribute("aria-label")||"", (e.textContent||"").trim().slice(0,80), e.getAttribute("href")||""].join("|"); }
 const setVal = (id, v) => { const el=document.getElementById(id); if (el) el.value=v; };
 
 /* ---------- home ---------- */
@@ -561,7 +573,7 @@ function renderCase(){
       h("a",{href:"#",class:"small",text:"→ כל התיקים"}),
       h("h2",{style:"font-size:1.5rem",text:c.title}),
       h("span",{class:"small muted"}, [c.track&&c.track!=="general"?"מסלול "+TRACKS[c.track].label:null, c.topic, c.amount?"סכום במחלוקת: "+money(c.amount):null, "נפתח "+fmt(c.createdAt), "קוד "+c.id.slice(0,8)].filter(Boolean).join(" · "))),
-    h("div",{class:"stages",role:"list","aria-label":"שלבי ההליך",style:`grid-template-columns:repeat(${stagesFor(c).length},minmax(0,1fr))`}, stagesFor(c).map((s,i)=>h("div",{role:"listitem",title:s.d,class:i<st||c.status==="settled"?"done":i===st&&isOpen(c)?"now":""}, `${i+1}. ${s.k}`))),
+    h("div",{class:"stages",role:"list","aria-label":"שלבי ההליך",style:`grid-template-columns:repeat(${stagesFor(c).length},minmax(0,1fr))`}, stagesFor(c).map((s,i)=>{ const done=i<st||c.status==="settled", now=!done&&i===st&&isOpen(c); return h("div",{role:"listitem",title:s.d,class:done?"done":now?"now":"","aria-current":now?"step":null}, `${i+1}. ${s.k}`, h("span",{class:"sr-only",text:(done?" (הושלם)":now?" (השלב הנוכחי)":"")+". "+s.d})); })),
     h("div",{class:"nextstep"}, h("span",{class:"k",text:isOpen(c)?"הצעד הבא":"סטטוס"}), h("span",{text:nextStep(c,me)})),
     h("div",{class:"parties"}, partyCard(c,"a",me), h("span",{class:"vs",text:"מול"}), partyCard(c,"b",me)));
 
@@ -573,10 +585,15 @@ function renderCase(){
   if (c.agreedProposal) tabs.push(["agreement","הסכם",0]);
   const body = {table:renderTable, docs:renderDocs, agenda:renderAgenda, summary:renderSummary, proposals:renderProposals, money:renderMoney, log:renderIncidents, agreement:renderAgreement}[S.tab] || renderTable;
   const main = h("section",{class:"card"},
-    h("div",{class:"tabs",role:"tablist"}, tabs.map(([id,l,n])=>h("button",{role:"tab","aria-selected":String(S.tab===id), onclick:()=>{S.tab=id; S.tone=null; render();}}, l+(n?` (${n})`:"")))),
-    body(c, me));
+    h("div",{class:"tabs",role:"tablist","aria-label":"חלקי התיק",onkeydown:ev=>tabKeys(ev, tabs.map(t=>t[0]))}, tabs.map(([id,l,n])=>h("button",{role:"tab",id:"tab-"+id,"aria-controls":"tabpanel","aria-selected":String(S.tab===id),tabindex:S.tab===id?"0":"-1", onclick:()=>{S.tab=id; S.tone=null; render();}}, l+(n?` (${n})`:"")))),
+    h("div",{role:"tabpanel",id:"tabpanel","aria-labelledby":"tab-"+S.tab}, body(c, me)));
   const side = h("aside",{class:"side"}, renderMediatorPanel(c,me), renderCaucus(c,me), renderMeeting(c,me), renderTrackInfo(c), renderClosure(c,me));
   return h("div",{}, head, h("div",{class:"grid"}, h("div",{class:"stack",style:"min-width:0"}, renderInterview(c,me), main), side));
+}
+function tabKeys(ev, ids){
+  const k=ev.key, i=ids.indexOf(S.tab); let j=null;
+  if (k==="ArrowLeft") j=(i+1)%ids.length; else if (k==="ArrowRight") j=(i-1+ids.length)%ids.length; else if (k==="Home") j=0; else if (k==="End") j=ids.length-1;
+  if (j==null) return; ev.preventDefault(); S.tab=ids[j]; S.tone=null; render(); document.getElementById("tab-"+ids[j])?.focus();
 }
 function partyCard(c, s, me){
   const uid = c.parties?.[s];
@@ -587,7 +604,7 @@ function partyCard(c, s, me){
     h("div",{class:"label",text:sideName(s)+" · ממתין להצטרפות"}),
     canJoin ? h("div",{class:"stack",style:"gap:6px;margin-top:6px"},
       h("p",{class:"small",text:"הוזמנת לגישור הזה? הצטרפ/י כאן. אחרי ההצטרפות תתבקש/י לאשר את כללי ההליך."}),
-      h("input",{id:"joinRole",maxlength:"40",placeholder:"התפקיד שלך"+(c.labels?.[s]?` (הוצע: ${c.labels[s]})`:"")}),
+      h("input",{id:"joinRole",maxlength:"40","aria-label":"התפקיד שלך בתיק",placeholder:"התפקיד שלך"+(c.labels?.[s]?` (הוצע: ${c.labels[s]})`:"")}),
       h("button",{class:"primary",onclick:()=>joinCase(s),disabled:S.busy==="join"}, S.busy==="join"?"מצטרף…":"הצטרפות כ"+sideName(s)))
     : me ? h("div",{class:"stack",style:"gap:6px;margin-top:6px"},
         h("p",{class:"small muted",text:"שתפו את הדף עם הצד השני (הרשאת Contributor) ובקשו ממנו לבחור בתיק הזה."}),
@@ -1332,7 +1349,7 @@ function renderCaucus(c, me){
     S.sample && c.consents?.[me] ? h("div",{class:"stack",style:"gap:8px"},
       h("div",{class:"chips"}, quick.map(([l,q])=>h("button",{type:"button",disabled:S.caucusBusy,onclick:()=>caucusSend(null,q)},l))),
       h("form",{class:"stack",style:"gap:8px",onsubmit:caucusSend},
-        h("textarea",{id:"caucusIn",maxlength:"3000",style:"min-height:64px",placeholder:"מה עובר עליך? מה היית רוצה להשיג?"}),
+        h("textarea",{id:"caucusIn",maxlength:"3000","aria-label":"הודעה פרטית למגשר",style:"min-height:64px",placeholder:"מה עובר עליך? מה היית רוצה להשיג?"}),
         h("div",{class:"row between"},
           h("button",{type:"button",class:"ghost small",onclick:caucusDraft,disabled:S.caucusBusy||!S.caucus.length},"נסח לי הודעה לשולחן המשותף"),
           h("button",{class:"primary",type:"submit",disabled:S.caucusBusy}, S.caucusBusy?h("span",{class:"spin"}):"שליחה")))) : null);
@@ -1375,7 +1392,9 @@ function renderMeeting(c, me){
     m?.when ? h("p",{}, h("b",{text:fmt(new Date(m.when).getTime())}), linkOk ? [" · ", h("a",{href:m.link,target:"_blank",rel:"noopener",text:"קישור למפגש"})] : m.link ? [" · ", h("span",{class:"mono",text:m.link})] : null) : h("p",{class:"small muted",text:"אפשר לקבוע מפגש בזום, Meet או Teams ולהדביק כאן את הקישור. במהלך המפגש ממשיכים לעבוד בדף."}),
     me && isOpen(c) ? h("details",{}, h("summary",{class:"small",style:"cursor:pointer",text:m?"שינוי המפגש":"קביעת מפגש"}),
       h("form",{class:"stack",style:"gap:8px;margin-top:8px",onsubmit:setMeeting},
+        h("label",{for:"mWhen",class:"small",text:"מועד המפגש"}),
         h("input",{id:"mWhen",type:"datetime-local",required:true}),
+        h("label",{for:"mLink",class:"small",text:"קישור למפגש הווידאו (לא חובה)"}),
         h("input",{id:"mLink",type:"url",placeholder:"https://…"}),
         h("button",{type:"submit"},"שמירה"))) : null);
 }
