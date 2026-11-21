@@ -173,6 +173,12 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:12p
 .incidents span{overflow-wrap:anywhere}
 .plan{margin:0;padding-inline-start:22px;display:grid;gap:2px;font-variant-numeric:tabular-nums}
 .invite{white-space:pre-wrap;background:var(--sunk);border-radius:8px;padding:10px;font-size:.92rem;overflow-wrap:anywhere}
+.interview{border-color:var(--med);border-width:2px}
+.ivq{font-family:var(--display);font-size:1.12rem;font-weight:600;line-height:1.45}
+.ivhist{display:grid;gap:8px;margin-top:8px}
+.ivhist div{background:var(--sunk);border-radius:8px;padding:8px 10px;font-size:.9rem;overflow-wrap:anywhere;white-space:pre-wrap}
+.bar{height:6px;background:var(--sunk);border-radius:999px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--med)}
 .info{margin:0;padding-inline-start:20px;display:grid;gap:5px;font-size:.92rem}
 @media (max-width:900px){
   .home,.grid{grid-template-columns:minmax(0,1fr)}
@@ -208,7 +214,7 @@ header.top{display:flex;align-items:center;justify-content:space-between;gap:12p
 "use strict";
 const $app = document.getElementById("app");
 const S = { db:null, user:null, sample:null, assets:null, downloads:null, uid:null, cases:[], loaded:false, slow:false,
-  view:null, caseId:null, c:null, statements:[], proposals:[], docs:[], pdocs:[], bids:{}, incidents:[], caucus:[], priv:{}, tab:"table", newTrack:"general", invite:"",
+  view:null, caseId:null, c:null, statements:[], proposals:[], docs:[], pdocs:[], bids:{}, incidents:[], caucus:[], priv:{}, iv:{}, ivBusy:false, tab:"table", newTrack:"general", invite:"",
   replyTo:null, busy:"", names:{}, unsub:[], caucusBusy:false, readOnly:false, tone:null, confirm:null, upload:null,
   toneCheck: (()=>{ try { return localStorage.getItem("toneCheck")!=="off"; } catch { return true; } })() };
 
@@ -285,8 +291,8 @@ function nextStep(c, me){
   switch(stagesFor(c)[stageOf(c)].key){
     case "consent": return !c.parties?.b ? "מחכים לצד השני. שתפו איתו את הדף (הרשאת Contributor) ובקשו ממנו להצטרף לתיק. אפשר לנסח לו הזמנה בכרטיס של "+sideName(other(me))+"." : !c.consents?.[me] ? "קראו את כללי ההליך ואשרו אותם." : "מחכים שהצד השני יאשר את כללי ההליך.";
     case "opening": return !c.openings?.[me] ? "כתבו דברי פתיחה בשולחן המשותף."+(T.log?" רשמו ביומן האירועים מקרים ספציפיים.":" אפשר גם להעלות מסמכים.") : "מחכים לדברי הפתיחה של הצד השני. בינתיים אפשר להעלות מסמכים"+(T.log?" ולמלא את יומן האירועים.":".");
-    case "agenda": return "בקשו מהמגשר לבנות סדר יום של הסוגיות, או הוסיפו סוגיות בעצמכם (לשונית ״סדר יום״).";
-    case "interests": return "ענו על שאלות המגשר. כשהתמונה מספיק ברורה, בקשו סיכום אינטרסים.";
+    case "agenda": return "התחילו את השיחה עם המגשר בכרטיס ״המגשר שואל אותך״. הוא יקבע בעצמו את הנושאים שצריך לברר.";
+    case "interests": return S.iv?.done ? "סיימת את השיחה עם המגשר. כשגם הצד השני יסיים, המגשר יסכם ויציע הסדרים." : "ענו על השאלות של המגשר בכרטיס ״המגשר שואל אותך״. כששני הצדדים יסיימו, המגשר יסכם ויציע הסדרים.";
     case "options": return "בקשו מהמגשר הצעות, או הציעו הסדר משלכם."+(T.money?" אם המחלוקת היא על כסף, נסו הצעה סגורה או פריסת תשלומים בלשונית ״כסף״.":"");
     case "negotiation": return "הגיבו על ההצעות. בסוגיה כספית אפשר לנסות הצעה סגורה או פריסת תשלומים.";
     case "agreement": return "יש הסכמה. נסחו טיוטת הסכם בלשונית ״הסכם״.";
@@ -358,7 +364,7 @@ function caseContext(c, opts={}){
   lines.push("\nמסמכים משותפים (שני הצדדים רואים אותם):\n" + docsContext(S.docs, opts.docBudget||24000));
   let t = S.statements.map(s => {
     const who = s.side==="m" ? "המגשר" : sideName(s.side)+(c.labels?.[s.side]?` (${c.labels[s.side]})`:"");
-    const kind = s.kind==="question" ? ` [שאלה ל${sideName(s.target)}]` : s.kind==="opening" ? " [דברי פתיחה]" : "";
+    const kind = s.kind==="question" ? ` [שאלה ל${sideName(s.target)}]` : s.kind==="opening" ? " [דברי פתיחה]" : s.kind==="shared" ? " [שותף באישורו מתוך השיחה הפרטית עם המגשר]" : "";
     const rep = s.replyTo ? ` [בתשובה ל: "${(S.statements.find(x=>x.id===s.replyTo)?.text||"").slice(0,120)}"]` : "";
     return `${who}${kind}${rep}: ${s.text}`;
   }).join("\n");
@@ -374,7 +380,7 @@ function caseContext(c, opts={}){
   const mr = c.money?.results; if (mr && Object.keys(mr).length) lines.push("תוצאות סבבי הצעה סגורה: " + Object.entries(mr).map(([r,x])=>`סבב ${r}: ${x.overlap?"נמצאה חפיפה, סכום "+money(x.settle):"אין חפיפה"}`).join("; "));
   return lines.join("\n");
 }
-const issueStatus = {open:"פתוח", agreed:"הוסכם", parked:"נדחה להמשך", dropped:"הוסר"};
+const issueStatus = {open:"פתוח", clarified:"בורר", agreed:"הוסכם", parked:"נדחה להמשך", dropped:"הוסר"};
 
 /* ---------- boot ---------- */
 async function boot(){
@@ -400,7 +406,7 @@ function route(){
   const id = m ? m[1] : null;
   if (id === S.caseId && S.view) { render(); return; }
   S.unsub.forEach(u=>{try{u()}catch{}}); S.unsub=[];
-  Object.assign(S, {statements:[], proposals:[], docs:[], pdocs:[], bids:{}, incidents:[], caucus:[], priv:{}, replyTo:null, tab:"table", tone:null, confirm:null, invite:""});
+  Object.assign(S, {statements:[], proposals:[], docs:[], pdocs:[], bids:{}, incidents:[], caucus:[], priv:{}, iv:{}, replyTo:null, tab:"table", tone:null, confirm:null, invite:""});
   if (!id){ S.view="home"; S.caseId=null; S.c=null; render(); window.scrollTo(0,0); return; }
   S.view="case"; S.caseId=id; S.c = S.cases.find(c=>c.id===id) || null;
   if (S.db){
@@ -415,6 +421,7 @@ function route(){
     if (S.uid){
       const mine = S.db.collection("data/users/"+S.uid);
       sub(mine.doc("caucus-"+id), d => { S.caucus = d.exists ? (d.data().messages||[]) : []; render(); });
+      sub(mine.doc("interview-"+id), d => { if (!S.ivSaving) S.iv = d.exists ? d.data() : {}; render(); });
       sub(mine.doc("private-"+id), d => { S.priv = d.exists ? d.data() : {}; render(); });
       sub(mine.where("caseId","==",id), s => { S.pdocs = s.docs.map(d=>({id:d.id, ...d.data()})).filter(d=>d.kind==="doc").sort((a,b)=>a.createdAt-b.createdAt); render(); });
     }
@@ -560,7 +567,7 @@ function renderCase(){
 
   if (me && isOpen(c) && !c.consents?.[me]) return h("div",{}, head, renderConsent(c, me));
 
-  const tabs = [["table","שולחן משותף",S.statements.length],["docs","מסמכים",S.docs.length+S.pdocs.length],["agenda","סדר יום",c.issues?.length],["summary","סיכום",0],["proposals","הצעות",S.proposals.length]];
+  const tabs = [["table","שולחן משותף",S.statements.length],["docs","מסמכים",S.docs.length+S.pdocs.length],["summary","סיכום",0],["proposals","הצעות",S.proposals.length]];
   if (TRACKS[c.track||"general"].log || S.incidents.length) tabs.splice(1,0,["log","יומן אירועים",S.incidents.length]);
   if (c.parties?.b) tabs.push(["money","כסף",0]);
   if (c.agreedProposal) tabs.push(["agreement","הסכם",0]);
@@ -569,7 +576,7 @@ function renderCase(){
     h("div",{class:"tabs",role:"tablist"}, tabs.map(([id,l,n])=>h("button",{role:"tab","aria-selected":String(S.tab===id), onclick:()=>{S.tab=id; S.tone=null; render();}}, l+(n?` (${n})`:"")))),
     body(c, me));
   const side = h("aside",{class:"side"}, renderMediatorPanel(c,me), renderCaucus(c,me), renderMeeting(c,me), renderTrackInfo(c), renderClosure(c,me));
-  return h("div",{}, head, h("div",{class:"grid"}, main, side));
+  return h("div",{}, head, h("div",{class:"grid"}, h("div",{class:"stack",style:"min-width:0"}, renderInterview(c,me), main), side));
 }
 function partyCard(c, s, me){
   const uid = c.parties?.[s];
@@ -669,6 +676,7 @@ function renderTable(c, me){
         s.kind==="question" ? h("span",{class:"pill "+s.target},"שאלה ל"+sideName(s.target)) : null,
         answered ? h("span",{class:"pill ok"},"נענתה") : null,
         s.kind==="opening" ? h("span",{class:"pill"},"דברי פתיחה") : null,
+        s.kind==="shared" ? h("span",{class:"pill m"},"מתוך השיחה עם המגשר") : null,
         h("span",{text:fmt(s.createdAt)})),
       reply ? h("div",{class:"quote",text:"בתשובה ל: "+reply.text.slice(0,140)+(reply.text.length>140?"…":"")}) : null,
       h("p",{text:s.text}),
@@ -873,10 +881,9 @@ function renderMediatorPanel(c, me){
     !me ? h("p",{class:"small muted",text:"רק הצדדים לתיק יכולים להפעיל את המגשר."}) : null,
     lock && !S.busy ? h("div",{class:"notice small"},h("span",{class:"spin"})," המגשר עובד על בקשה של "+(lock.side===me?"את/ה":"הצד השני")+"…") : null,
     h("div",{class:"actions"},
-      btn("agenda","בניית סדר יום","מוציא מהשיחה ומהמסמכים את הסוגיות שבמחלוקת", aiAgenda),
-      btn("ask","שאלות לשני הצדדים","2–3 שאלות לכל צד, על סמך מה שנאמר ומה שבמסמכים", aiAsk),
-      btn("sum","סיכום אינטרסים","מה חשוב לכל צד, איפה יש הסכמה ואיפה הפער", aiSummary),
-      btn("prop","הצעות להסדר","2–3 הצעות שעונות על הצרכים של שניהם", aiPropose, !hasBoth)),
+      btn("sum","סיכום אינטרסים עכשיו","בלי לחכות לסוף השיחות: מה חשוב לכל צד ואיפה הפער", aiSummary),
+      btn("prop","הצעות להסדר עכשיו","בלי לחכות לסוף השיחות: 2–3 הצעות שעונות על הצרכים של שניהם", aiPropose, !hasBoth)),
+    h("p",{class:"small muted",text:"המגשר מראיין כל צד בנפרד. כששני הצדדים מסיימים, הוא מסכם ומציע הסדרים בעצמו. הכפתורים כאן מקדימים את זה."}),
     !hasBoth && me ? h("p",{class:"small muted",text:"הצעות להסדר יהיו זמינות אחרי ששני הצדדים יאשרו את כללי ההליך."}) : null,
     h("p",{class:"small muted",text:"המגשר אינו עורך דין ואינו נותן ייעוץ משפטי. לפני חתימה מומלץ להתייעץ עם עורך דין."}));
 }
@@ -914,21 +921,21 @@ function aiAsk(){
     S.tab="table"; toast("המגשר שאל שאלות");
   });
 }
-function aiSummary(){
-  return withLock("sum", async () => {
+function aiSummary(){ return withLock("sum", summaryCore); }
+async function summaryCore(){ {
     const r = await S.sample.json(`${MEDIATOR}\n\n${caseContext(S.c)}\n\nמשימה: כתוב סיכום ביניים מאוזן. הפרד בין עמדות (מה כל צד דורש) לבין אינטרסים (למה זה חשוב לו). ציין קריטריונים אובייקטיביים שיכולים לעזור (מחיר שוק, נוהג, מסמך).\nהחזר JSON בלבד: {"overview":"2-3 משפטים","a_positions":["..."],"a_interests":["..."],"b_positions":["..."],"b_interests":["..."],"common":["..."],"gaps":["..."],"criteria":["..."],"next":"הצעד המומלץ הבא"}`, {modelTier:"default"});
     const clean = {overview:String(r.overview||""), a_positions:arr(r.a_positions), a_interests:arr(r.a_interests), b_positions:arr(r.b_positions), b_interests:arr(r.b_interests), common:arr(r.common), gaps:arr(r.gaps), criteria:arr(r.criteria), next:String(r.next||""), at:Date.now()};
     await S.db.doc("cases/"+S.caseId).update({summary:clean});
     S.tab="summary"; toast("הסיכום עודכן");
-  });
+  }
 }
-function aiPropose(){
-  return withLock("prop", async () => {
+function aiPropose(){ return withLock("prop", proposeCore); }
+async function proposeCore(){ {
     const r = await S.sample.json(`${MEDIATOR}\n\n${caseContext(S.c)}\n\nמשימה: הצע 2 עד 3 הסדרים שונים זה מזה, שכל אחד מהם עונה על האינטרסים המרכזיים של שני הצדדים ומכסה את הסוגיות הפתוחות בסדר היום. למד מהתגובות להצעות קודמות ואל תחזור על מה שנדחה. כל תנאי קונקרטי: מי, מה, מתי, כמה. התבסס על קריטריונים אובייקטיביים ועל המסמכים.\nהחזר JSON בלבד: [{"title":"שם קצר","terms":["תנאי"],"why_a":"למה זה טוב לצד א׳","why_b":"למה זה טוב לצד ב׳","criteria":"על מה ההצעה מבוססת"}]`, {modelTier:"complex"});
     if (!Array.isArray(r) || !r.length) throw {code:"invalid_json"};
     await addProposals(r.slice(0,3), "m", null);
     S.tab="proposals"; toast("נוספו הצעות להסדר");
-  });
+  }
 }
 async function addProposals(list, by, basedOn){
   const col = S.db.collection(`cases/${S.caseId}/proposals`);
@@ -1205,6 +1212,107 @@ async function save(filename, data){
   try { await S.downloads.save({filename, data}); } catch(e){ if (e?.code!=="declined") toast("ההורדה לא הצליחה"); }
 }
 
+/* ---------- private interview with the mediator ---------- */
+function renderInterview(c, me){
+  if (!me || !isOpen(c) || !c.consents?.[me]) return null;
+  const iv = S.iv || {}, qa = iv.qa || [], n = qa.length;
+  const issues = (c.issues||[]).filter(i=>i.status!=="dropped");
+  const mine = issues.filter(i=>i.cl?.[me] || i.status==="agreed").length;
+  const otherDone = c.interview?.[other(me)]?.done;
+  const card = h("section",{class:"card stack interview"},
+    h("div",{class:"row between"}, h("h3",{text:"המגשר שואל אותך"}), h("span",{class:"pill "+me},"חסוי · רק את/ה והמגשר")));
+  if (issues.length) card.append(h("div",{class:"stack",style:"gap:4px"},
+    h("span",{class:"small muted",text:`המגשר בירר איתך ${mine} מתוך ${issues.length} נושאים`}),
+    h("div",{class:"bar"},h("span",{style:`width:${Math.round(100*mine/issues.length)}%`}))));
+  if (!S.sample){ card.append(h("div",{class:"notice small",text:"המגשר ה-AI לא זמין בתצוגה הזו. פתחו את הדף ב-claude.ai כשאתם מחוברים."})); return card; }
+  if (S.ivBusy){ card.append(h("p",{},h("span",{class:"spin"})," המגשר חושב…")); }
+  else if (iv.share){
+    card.append(h("div",{class:"stack",style:"gap:8px"},
+      h("b",{text:"המגשר מציע להעביר לשולחן המשותף:"}),
+      h("p",{class:"small muted",text:"התשובה שלך עצמה נשארת חסויה. רק הנוסח הזה יעבור, ורק אם תאשר/י. אפשר לערוך אותו."}),
+      h("textarea",{id:"ivShare-"+n,maxlength:"800",style:"min-height:70px"}, iv.share),
+      h("div",{class:"row"},
+        h("button",{class:"primary",onclick:()=>ivShare(true)},"לשתף"),
+        h("button",{onclick:()=>ivShare(false)},"לא לשתף"))));
+  }
+  else if (iv.pending){
+    card.append(h("div",{class:"stack",style:"gap:8px"},
+      h("p",{class:"ivq",text:iv.pending.q}),
+      iv.pending.basis ? h("span",{class:"basis",text:"מבוסס על: "+iv.pending.basis}) : null,
+      h("textarea",{id:"ivAns-"+n,maxlength:"3000",placeholder:"התשובה שלך. היא נשארת בינך לבין המגשר."}),
+      h("div",{class:"row between"},
+        h("button",{class:"ghost small",onclick:()=>ivStep("(הצד בחר לא לענות על השאלה הזו)")},"מעדיף/ה לא לענות"),
+        h("button",{class:"primary",onclick:()=>{ const a=val("ivAns-"+n); if (!a){ toast("כתבו תשובה, או בחרו לא לענות"); return; } ivStep(a); }},"שליחה למגשר"))));
+  }
+  else if (iv.done){
+    card.append(h("p",{text: otherDone ? (c.proposalCount ? "שני הצדדים סיימו את השיחות עם המגשר. ההצעות מחכות לך בלשונית ״הצעות״." : "שני הצדדים סיימו. המגשר מכין סיכום והצעות להסדר.") : "סיימת את השיחה עם המגשר. כשגם הצד השני יסיים, המגשר יסכם ויציע הסדרים."}),
+      h("div",{},h("button",{class:"ghost small",onclick:()=>ivStep(null, true)},"יש לי עוד משהו לספר למגשר")));
+  }
+  else if (!n){
+    card.append(h("p",{text:"המגשר ישאל אותך כמה שאלות, אחת בכל פעם, כדי להבין מה חשוב לך ומה יכול לעבוד בשבילך. התשובות נשארות ביניכם. אחרי כל תשובה הוא יציע מה להעביר לצד השני, ושום דבר לא עובר בלי אישורך."}),
+      !c.openings?.[me] ? h("p",{class:"small muted",text:"כדאי לכתוב קודם דברי פתיחה בשולחן המשותף, כדי שהמגשר יכיר את הצד שלך."}) : null,
+      h("div",{},h("button",{class:"primary",onclick:()=>ivStep(null)},"להתחיל את השיחה עם המגשר")));
+  }
+  else card.append(h("div",{},h("button",{class:"primary",onclick:()=>ivStep(null)},"לשאלה הבאה")));
+  if (n) card.append(h("details",{}, h("summary",{class:"small",style:"cursor:pointer",text:`השאלות והתשובות שלך (${n})`}),
+    h("div",{class:"ivhist"}, qa.map(x=>h("div",{}, h("b",{text:x.q}), "\n", x.a)))));
+  return card;
+}
+async function saveIv(patch){
+  const next = {...(S.iv||{}), ...patch, at:Date.now()};
+  S.iv = next; S.ivSaving = true; render();
+  try { await S.db.doc(`data/users/${S.uid}/interview-${S.caseId}`).set(next); } finally { S.ivSaving = false; }
+}
+function ivPrompt(c, me, task){
+  const qa = (S.iv?.qa||[]).map((x,i)=>`ש${i+1}: ${x.q}\nת${i+1}: ${x.a}`).join("\n\n") || "(עדיין אין)";
+  return `${MEDIATOR}\n\n${caseContext(c,{docBudget:12000})}\n\nזו שיחה פרטית (קוקוס) בינך לבין ${sideName(me)}${c.labels?.[me]?` (${c.labels[me]})`:""} בלבד. התשובות חסויות: שום דבר לא עובר לצד השני בלי אישור מפורש של ${sideName(me)}.${S.priv.safetyConcern?"\nהצד הזה דיווח על חשש לבטיחות או לפער כוחות. שאל בעדינות, ואל תלחץ.":""}\n\nמסמכים חסויים של הצד הזה:\n${docsContext(S.pdocs.map(d=>({...d,private:true})), 8000)}\n\nהשיחה הפרטית עד עכשיו:\n${qa}\n\n${task}`;
+}
+async function ivStep(answer, reopen){
+  const c = S.c, me = mySide(c);
+  if (S.ivBusy) return;
+  S.ivBusy = true; render();
+  try {
+    const qa = [...(S.iv?.qa||[])];
+    if (answer!=null && S.iv?.pending){ qa.push({q:S.iv.pending.q, basis:S.iv.pending.basis||"", a:answer, at:Date.now()}); await saveIv({qa, pending:null}); }
+    const needIssues = !(c.issues||[]).length;
+    const list = (c.issues||[]).map((i,k)=>`${k+1}. ${i.text}${i.cl?.[me]?" [בורר עם הצד הזה]":""}`).join("\n");
+    const task = `משימה: אתה מנהל ראיון בירור עם הצד הזה, שאלה אחת בכל פעם.
+${needIssues ? "עדיין אין רשימת נושאים לגישור. קבע 3 עד 7 נושאים שצריך לברר ולהסכים עליהם, מנוסחים בניטרליות, בשדה issues." : "הנושאים שאתה מברר:\n"+list}
+${answer!=null ? `התשובה האחרונה של הצד: """${answer}"""` : reopen ? "הצד ביקש להוסיף משהו. שאל מה הוא רוצה להוסיף." : "זו תחילת השיחה. פתח בשאלה רחבה ומזמינה."}
+1. אם הייתה תשובה: כתוב בשדה share משפט או שניים, ניטרליים ובגוף שלישי ("${c.labels?.[me]||sideName(me)} מציין/ת ש..."), עם מה שיעזור לצד השני להבין את האינטרסים והצרכים של הצד הזה ולהתקדם להסכם. בלי מידע רגיש, מביך או טקטי (למשל הסכום המקסימלי שהוא מוכן לשלם). אם אין מה לשתף, השאר ריק.
+2. בשדה clarified ציין את מספרי הנושאים שבהם הבנת כבר את האינטרסים, החששות והגמישות של הצד הזה.
+3. אם עדיין חסר מידע חשוב, שאל את השאלה הבאה: פתוחה, קצרה, לא מאשימה. התבסס על מה שנאמר, על המסמכים ועל מה שהצד השני שיתף. אל תחזור על שאלות. ציין בשדה basis על מה השאלה מבוססת, אם יש.
+4. כשיש לך תמונה מספיקה בכל הנושאים (בדרך כלל אחרי 4 עד 8 שאלות), החזר done true ו-question ריק.
+החזר JSON בלבד: {${needIssues?'"issues":["..."],':''}"share":"","clarified":[1],"question":"","basis":"","done":false}`;
+    const r = await S.sample.json(ivPrompt(c, me, task), {modelTier:"default"});
+    const ref = S.db.doc("cases/"+S.caseId);
+    const fresh = (await ref.get()).data() || {};
+    let issues = fresh.issues || [];
+    if (!issues.length && Array.isArray(r.issues)) issues = arr(r.issues,7).map((t,i)=>({id:(Date.now()+i).toString(36), text:t, status:"open", by:"m"}));
+    const cl = Array.isArray(r.clarified) ? r.clarified.map(Number) : [];
+    issues = issues.map((i,k)=>cl.includes(k+1) && !i.cl?.[me] ? {...i, cl:{...(i.cl||{}), [me]:true}, status: i.status==="open" && (i.cl?.[other(me)]) ? "clarified" : i.status} : i);
+    const done = !!r.done || qa.length >= 10 || !r.question;
+    const next = done ? null : {q:String(r.question), basis:String(r.basis||"")};
+    await ref.update({issues, interview:{[me]:{answered:qa.length, done}}});
+    await saveIv({qa, pending:next, done, share: answer!=null ? String(r.share||"").trim() : ""});
+    if (done && fresh.interview?.[other(me)]?.done && !fresh.proposalCount && !fresh.autoProposed){
+      await ref.update({autoProposed:true});
+      S.ivBusy = false;
+      await withLock("prop", async () => { await summaryCore(); await proposeCore(); });
+    }
+  } catch(e){ toast(e?.code ? sampleErr(e) : "המגשר לא הצליח להמשיך. נסו שוב."); }
+  S.ivBusy = false; render();
+}
+async function ivShare(ok){
+  const me = mySide(S.c), n = (S.iv?.qa||[]).length;
+  const text = ok ? val("ivShare-"+n) : "";
+  try {
+    if (text) await S.db.collection(`cases/${S.caseId}/statements`).add({side:me, uid:S.uid, kind:"shared", text, createdAt:Date.now()});
+    await saveIv({share:""});
+    if (text) toast("הועבר לשולחן המשותף");
+  } catch { toast("השמירה נכשלה"); }
+}
+
 /* ---------- private caucus ---------- */
 function renderCaucus(c, me){
   if (!me) return null;
@@ -1219,7 +1327,7 @@ function renderCaucus(c, me){
     ["האם ההצעה טובה לי?","תעזור לי להעריך את ההצעה האחרונה ביחס לאינטרסים שלי ולחלופות שלי."],
     ["מה במסמכים שלי?","מה במסמכים שהעליתי, כולל החסויים, יכול לחזק או להחליש את המצב שלי? אילו מסמכים חסרים?"]];
   return h("div",{class:"card stack"},
-    h("div",{class:"row between"}, h("h3",{text:"חדר פרטי עם המגשר"}), h("span",{class:"pill "+me},"רק את/ה")),
+    h("div",{class:"row between"}, h("h3",{text:"שיחה חופשית עם המגשר"}), h("span",{class:"pill "+me},"רק את/ה")),
     log,
     S.sample && c.consents?.[me] ? h("div",{class:"stack",style:"gap:8px"},
       h("div",{class:"chips"}, quick.map(([l,q])=>h("button",{type:"button",disabled:S.caucusBusy,onclick:()=>caucusSend(null,q)},l))),
